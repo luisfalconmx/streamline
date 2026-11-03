@@ -1,0 +1,130 @@
+<p align="center">
+  <img src="src-tauri/icons/128x128@2x.png" width="96" alt="Streamline" />
+</p>
+
+<h1 align="center">Streamline</h1>
+
+<p align="center">
+  Descarga videos y audio de YouTube y más de 1.800 sitios. Sin límites de velocidad y sin anuncios.<br/>
+  App de escritorio para <b>macOS</b>, <b>Windows</b> y <b>Linux</b>, impulsada por <a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a>.
+</p>
+
+---
+
+## ✨ Funciones
+
+- **Pega y descarga**: pega un enlace (o cópialo y vuelve a la app, se detecta solo) y elige la calidad.
+- **Toda la información antes de descargar**: título, canal, duración, vistas, fecha, miniatura y el **peso estimado** de cada calidad.
+- **Todas las resoluciones**: de 144p a 8K, con FPS altos (60 fps) y HDR cuando existen. Contenedor MP4, MKV o WebM.
+- **Solo audio**: MP3, M4A, Opus, FLAC o WAV, con carátula y metadatos.
+- **Velocidad máxima**: hasta 32 fragmentos en paralelo (`--concurrent-fragments`), re-extracción automática ante throttling y sin límite de ancho de banda.
+- **Cola de descargas**: varias descargas simultáneas, con progreso, velocidad y tiempo restante; cancelar, reintentar, abrir el archivo o mostrarlo en la carpeta.
+- **Playlists**: elige qué videos descargar y en qué calidad.
+- **Extras**: subtítulos incrustados, capítulos, SponsorBlock y cookies del navegador para videos privados o con restricción de edad.
+- **Tema claro y oscuro**, interfaz en español.
+
+## 📦 Instalación
+
+Descarga el instalador de tu sistema desde la página de **[Releases](https://github.com/luisfalconmx/streamline/releases)**:
+
+| Sistema | Archivo |
+| --- | --- |
+| macOS (Apple Silicon) | `Streamline_x.y.z_aarch64.dmg` |
+| macOS (Intel) | `Streamline_x.y.z_x64.dmg` |
+| Windows | `Streamline_x.y.z_x64-setup.exe` o `.msi` |
+| Linux | `.AppImage`, `.deb` o `.rpm` |
+
+> **macOS**: la app no está firmada con un certificado de desarrollador de Apple. Si al abrirla aparece «está dañada», ejecuta una vez:
+> ```bash
+> xattr -cr /Applications/Streamline.app
+> ```
+
+Los instaladores ya incluyen **yt-dlp**, **ffmpeg/ffprobe** y **deno** (yt-dlp necesita un runtime de JavaScript para tener soporte completo de YouTube), así que no hay que instalar nada más.
+
+## 🧱 Stack
+
+| Capa | Tecnología |
+| --- | --- |
+| Shell de escritorio | [Tauri 2](https://tauri.app) (Rust) |
+| UI | React 19 + TypeScript + [Vite](https://vite.dev) |
+| Componentes | [HeroUI v3](https://heroui.com) |
+| Estilos | Tailwind CSS v4 |
+| Motor de descarga | [yt-dlp](https://github.com/yt-dlp/yt-dlp) + ffmpeg + deno (sidecars) |
+
+Se eligió **Vite** en lugar de Next.js porque Tauri sirve archivos estáticos: no hay servidor, SSR ni rutas de API que aprovechar, y Vite da un HMR más rápido y una configuración más simple.
+
+```
+streamline/
+├── src/                     # Frontend React
+│   ├── components/          # Vistas y componentes de UI (HeroUI)
+│   ├── lib/                 # Puente con Tauri, formatos y calidades, mock para navegador
+│   └── store.tsx            # Estado global: ajustes, cola de descargas e historial
+├── src-tauri/               # Backend Rust
+│   ├── src/ytdlp.rs         # Ejecuta yt-dlp, parsea el progreso y emite eventos
+│   ├── binaries/            # Sidecars (se descargan con `pnpm sidecars`, no se versionan)
+│   └── tauri.conf.json
+├── scripts/fetch-sidecars.mjs
+├── docker/ + compose.yaml   # Entorno de desarrollo con Docker Desktop
+└── .github/workflows/       # CI y release multiplataforma
+```
+
+## 🐳 Desarrollo con Docker Desktop
+
+El entorno completo (Rust, Node, pnpm, WebKitGTK) vive en un contenedor. Solo necesitas Docker Desktop.
+
+```bash
+docker compose build
+```
+
+**UI en el navegador** (backend simulado, ideal para trabajar en la interfaz con hot reload) en http://localhost:1420:
+
+```bash
+docker compose up web
+```
+
+**App de escritorio real** (Tauri sobre un escritorio virtual con noVNC) en http://localhost:6080/vnc.html?autoconnect=1&resize=remote. Los archivos descargados aparecen en `./downloads`:
+
+```bash
+docker compose up desktop
+```
+
+**Instaladores de Linux** (`.deb`, `.rpm` y `.AppImage` para la arquitectura de tu máquina), que se copian a `./release/linux`:
+
+```bash
+docker compose run --rm build
+```
+
+## 💻 Desarrollo nativo (opcional)
+
+Para abrir la ventana nativa en macOS o Windows necesitas [Rust](https://rustup.rs), Node 24 y pnpm:
+
+```bash
+pnpm install
+```
+
+```bash
+pnpm sidecars
+```
+
+```bash
+pnpm tauri dev
+```
+
+## 🚀 Publicar una versión
+
+1. Actualiza `version` en `package.json`, `src-tauri/tauri.conf.json` y `src-tauri/Cargo.toml`.
+2. Crea y sube un tag:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+El workflow [`release.yml`](.github/workflows/release.yml) compila en paralelo para macOS (Apple Silicon e Intel), Windows y Linux, y adjunta los instaladores al Release. También puedes lanzarlo a mano desde la pestaña **Actions**.
+
+## ⚖️ Licencias de terceros
+
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp): Unlicense.
+- [FFmpeg](https://ffmpeg.org): binarios GPL de [yt-dlp/FFmpeg-Builds](https://github.com/yt-dlp/FFmpeg-Builds) (Windows/Linux) y [Martin Riedl](https://ffmpeg.martin-riedl.de) (macOS).
+- [Deno](https://deno.com): MIT.
+
+Descarga solo contenido del que tengas derechos o permiso. Respeta los términos de servicio de cada sitio.

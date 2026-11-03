@@ -1,0 +1,60 @@
+# Entorno de desarrollo de Streamline con Docker Desktop.
+#
+#   docker compose up web       → UI en el navegador con backend simulado   http://localhost:1420
+#   docker compose up desktop   → app Tauri real en un escritorio virtual   http://localhost:6080
+#   docker compose run --rm build → instaladores Linux en ./release/linux
+#
+x-base: &base
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  image: streamline-dev:latest
+  volumes:
+    - .:/app
+    - node_modules:/app/node_modules
+    - cargo_target:/app/src-tauri/target
+    - cargo_registry:/usr/local/cargo/registry
+    - pnpm_store:/pnpm/store
+  environment:
+    PNPM_STORE_DIR: /pnpm/store
+    CI: "true"
+
+services:
+  web:
+    <<: *base
+    command: web
+    ports:
+      - "1420:1420"
+
+  desktop:
+    <<: *base
+    command: desktop
+    shm_size: "1gb"
+    ports:
+      - "6080:6080"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - cargo_target:/app/src-tauri/target
+      - cargo_registry:/usr/local/cargo/registry
+      - pnpm_store:/pnpm/store
+      - ./downloads:/root/Downloads
+
+  build:
+    <<: *base
+    command: build
+    profiles: ["build"]
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - cargo_registry:/usr/local/cargo/registry
+      - cargo_target_build:/app/src-tauri/target
+      - pnpm_store:/pnpm/store
+      # Los instaladores se copian a ./release/linux en tu máquina.
+
+volumes:
+  node_modules:
+  cargo_target:
+  cargo_target_build:
+  cargo_registry:
+  pnpm_store:
