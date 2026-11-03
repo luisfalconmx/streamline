@@ -21,6 +21,9 @@ case "${1:-desktop}" in
   desktop)
     ensure_deps
     node scripts/fetch-sidecars.mjs
+    # Make ~/Downloads (mounted from ./downloads) the default download folder.
+    mkdir -p "$HOME/Downloads" "$HOME/.config"
+    echo 'XDG_DOWNLOAD_DIR="$HOME/Downloads"' > "$HOME/.config/user-dirs.dirs"
     export DISPLAY=:99
     Xvfb :99 -screen 0 1280x860x24 -nolisten tcp >/dev/null 2>&1 &
     sleep 1

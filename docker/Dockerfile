@@ -29,9 +29,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && npm install -g pnpm@12
 
 WORKDIR /app
-COPY docker/entrypoint.sh /usr/local/bin/streamline-entrypoint
-RUN chmod +x /usr/local/bin/streamline-entrypoint
 
 EXPOSE 1420 6080
-ENTRYPOINT ["streamline-entrypoint"]
+# The entrypoint is read from the mounted repo, so edits apply without rebuilding.
+ENTRYPOINT ["bash", "/app/docker/entrypoint.sh"]
 CMD ["desktop"]
