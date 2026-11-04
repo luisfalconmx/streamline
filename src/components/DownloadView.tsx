@@ -2,7 +2,7 @@ import { Alert, Button, Card, Skeleton, Switch, Tabs, toast } from '@heroui/reac
 import { Download, Film, Music, Sparkles, Zap } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { formatBytes, looksLikeUrl, uid } from '../lib/format'
-import { bestThumbnail, buildAudioOptions, buildVideoOptions } from '../lib/qualities'
+import { bestThumbnail, buildAudioOptions, buildVideoOptions, nameFromDirectUrl } from '../lib/qualities'
 import { buildRequest } from '../lib/request'
 import { fetchInfo, readClipboard } from '../lib/tauri'
 import type { DownloadItem, MediaMode, Settings, YtInfo } from '../lib/types'
@@ -51,6 +51,11 @@ export function DownloadView({ onShowDownloads }: { onShowDownloads: () => void 
       try {
         const data = await fetchInfo(target, settings.cookiesBrowser)
         if (seq !== requestSeq.current) return
+        if (data.direct) {
+          // yt-dlp names direct files after the CDN script (e.g. "remote_control").
+          const name = nameFromDirectUrl(target)
+          if (name) data.title = name
+        }
         setInfo(data)
         const hasVideo = buildVideoOptions(data, settings).length > 0
         setMode(hasVideo ? 'video' : 'audio')
@@ -106,7 +111,11 @@ export function DownloadView({ onShowDownloads }: { onShowDownloads: () => void 
       request: buildRequest(info.webpage_url || url, current.format, mode, settings, {
         format: current.audioFormat,
         quality: current.audioQuality,
-      }, { remux: !!info.direct || info.extractor_key === 'Generic' }),
+      }, {
+        remux: !!info.direct || info.extractor_key === 'Generic',
+        ext: info.direct ? current.ext : undefined,
+        title: info.direct ? info.title : undefined,
+      }),
       status: 'queued',
       progress: 0,
       createdAt: Date.now(),

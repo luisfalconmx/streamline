@@ -183,7 +183,7 @@ export function SettingsView() {
             <RefreshCw className="size-4" /> Buscar actualización
           </Button>
         </Row>
-        <Row label="Streamline 0.1.1" hint="Código abierto. Impulsado por yt-dlp.">
+        <Row label="Streamline 0.1.2" hint="Código abierto. Impulsado por yt-dlp.">
           <Button size="sm" variant="ghost" onPress={() => openUrl(REPO)}>
             GitHub
           </Button>

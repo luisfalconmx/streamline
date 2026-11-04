@@ -81,6 +81,8 @@ export interface QualityOption {
   height?: number
   audioFormat?: string
   audioQuality?: string
+  /** Container of the source file (direct links) */
+  ext?: string
 }
 
 export type DownloadStatus =
@@ -137,6 +139,10 @@ export interface DownloadRequest {
   concurrentFragments: number
   cookiesBrowser?: string
   filenameTemplate?: string
+  /** Forced output extension (direct links whose URL hides the real type) */
+  ext?: string
+  /** Literal file name instead of yt-dlp's %(title)s */
+  title?: string
 }
 
 export type DownloadEvent =

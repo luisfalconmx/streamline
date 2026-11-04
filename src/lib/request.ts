@@ -6,7 +6,7 @@ export function buildRequest(
   mode: MediaMode,
   settings: Settings,
   audio?: { format?: string; quality?: string },
-  opts: { remux?: boolean } = {},
+  opts: { remux?: boolean; ext?: string; title?: string } = {},
 ): Omit<DownloadRequest, 'id'> {
   const isAudio = mode === 'audio'
   return {
@@ -17,6 +17,8 @@ export function buildRequest(
     audioQuality: isAudio ? (audio?.quality ?? '0') : undefined,
     mergeFormat: isAudio ? undefined : settings.mergeFormat,
     remuxVideo: !isAudio && !!opts.remux,
+    ext: !isAudio ? opts.ext : undefined,
+    title: opts.title,
     embedSubs: !isAudio && settings.embedSubs,
     subLangs: settings.subLangs,
     // Thumbnails cannot be embedded into WAV/WebM files.

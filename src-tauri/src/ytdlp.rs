@@ -200,6 +200,18 @@ fn ext_from_content_type(ct: &str) -> Option<(&'static str, bool)> {
     })
 }
 
+/// Extensions yt-dlp accepts as media containers. Anything else coming from a
+/// direct link (e.g. `remote_control.php`) is a server script name, not the
+/// real file type, and yt-dlp refuses to save it "for safety reasons".
+fn is_media_ext(ext: &str) -> bool {
+    matches!(
+        ext.to_ascii_lowercase().as_str(),
+        "mp4" | "m4v" | "mov" | "mkv" | "webm" | "flv" | "avi" | "ts" | "3gp" | "ogv" | "wmv" | "mpg" | "mpeg"
+            | "mp3" | "m4a" | "aac" | "ogg" | "oga" | "opus" | "wav" | "flac" | "weba" | "mka"
+            | "m3u8" | "mpd" | "f4m" | "ism"
+    )
+}
+
 struct Probe {
     size: Option<u64>,
     content_type: Option<String>,
@@ -300,7 +312,7 @@ async fn probe_direct_formats(info: &mut Value) {
                 let ext_missing = f
                     .get("ext")
                     .and_then(Value::as_str)
-                    .is_none_or(|e| e.is_empty() || e.starts_with("unknown"));
+                    .is_none_or(|e| !is_media_ext(e));
                 if ext_missing {
                     f.insert("ext".into(), ext.into());
                 }
@@ -349,6 +361,105 @@ pub struct DownloadRequest {
     pub concurrent_fragments: Option<u32>,
     pub cookies_browser: Option<String>,
     pub filename_template: Option<String>,
+    /// Forced output extension for direct links whose URL lies about the type.
+    pub ext: Option<String>,
+    /// Readable file name to use instead of `%(title)s` (direct links).
+    pub title: Option<String>,
+}
+
+const DEFAULT_TEMPLATE: &str = "%(title).180B.%(ext)s";
+
+/// Short, stable FNV-1a hash used to make every file name unique.
+fn short_hash(s: &str) -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in s.as_bytes() {
+        h ^= u64::from(*b);
+        h = h.wrapping_mul(0x0100_0000_01b3);
+    }
+    format!("{:08x}", (h ^ (h >> 32)) as u32)
+}
+
+fn sanitize_filename(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control() { '_' } else { c })
+        .collect();
+    let trimmed = cleaned.trim().trim_matches('.');
+    trimmed.chars().take(150).collect::<String>().replace('%', "%%")
+}
+
+/// Builds the `-o` template: optional literal title and extension, plus a
+/// ` [hash]` suffix so downloads with the same title never overwrite each other.
+fn output_template(req: &DownloadRequest) -> String {
+    let mut tmpl = req
+        .filename_template
+        .as_deref()
+        .filter(|t| !t.trim().is_empty())
+        .unwrap_or(DEFAULT_TEMPLATE)
+        .to_string();
+
+    if let Some(title) = req.title.as_deref().map(sanitize_filename).filter(|t| !t.is_empty()) {
+        tmpl = tmpl.replace("%(title).180B", &title).replace("%(title)s", &title);
+    }
+    let ext = forced_ext(req);
+
+    // Direct links carry rotating tokens in the query string; hash the path so
+    // the same file keeps the same name. Everything else hashes the full URL.
+    let source = if ext.is_some() {
+        req.url.split(['?', '#']).next().unwrap_or(&req.url)
+    } else {
+        &req.url
+    };
+    let tag = format!(" [{}]", short_hash(source));
+    match tmpl.strip_suffix(".%(ext)s") {
+        Some(stem) => format!("{stem}{tag}.%(ext)s"),
+        None => format!("{tmpl}{tag}"),
+    }
+}
+
+/// Real media extension for a direct link (from its `Content-Type`), if any.
+fn forced_ext(req: &DownloadRequest) -> Option<String> {
+    req.ext
+        .as_deref()
+        .map(str::to_ascii_lowercase)
+        .filter(|e| is_media_ext(e) && !matches!(e.as_str(), "m3u8" | "mpd" | "f4m" | "ism"))
+}
+
+/// Direct links: yt-dlp takes the extension from the final redirect URL, which
+/// is often a server script (`remote_control.php`), and then refuses to save
+/// the file. Extract the info ourselves, put the real media extension in it and
+/// hand it back to yt-dlp with `--load-info-json`, keeping its safety checks on.
+async fn prepare_direct_info(cache_dir: PathBuf, req: &DownloadRequest, ext: &str) -> Result<PathBuf, String> {
+    let mut cmd = ytdlp(req.cookies_browser.as_deref());
+    cmd.args(["-J", "--no-playlist", "--"]).arg(&req.url);
+    let output = tokio::time::timeout(Duration::from_secs(120), cmd.output())
+        .await
+        .map_err(|_| "Tiempo de espera agotado al preparar la descarga".to_string())?
+        .map_err(spawn_error)?;
+    if !output.status.success() {
+        return Err(last_error(&String::from_utf8_lossy(&output.stderr)));
+    }
+    let mut info: Value = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("Respuesta inválida de yt-dlp: {e}"))?;
+
+    let fix = |obj: &mut serde_json::Map<String, Value>| {
+        let bad = obj.get("ext").and_then(Value::as_str).is_none_or(|e| !is_media_ext(e));
+        if bad {
+            obj.insert("ext".into(), ext.into());
+        }
+    };
+    if let Some(obj) = info.as_object_mut() {
+        fix(obj);
+        if let Some(Value::Array(formats)) = obj.get_mut("formats") {
+            formats.iter_mut().filter_map(Value::as_object_mut).for_each(fix);
+        }
+    }
+
+    let dir = cache_dir.join("info");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(format!("{}.info.json", req.id.replace(|c: char| !c.is_ascii_alphanumeric(), "_")));
+    std::fs::write(&path, serde_json::to_vec(&info).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    Ok(path)
 }
 
 #[derive(Clone, Serialize)]
@@ -408,7 +519,8 @@ fn parse_progress(id: &str, line: &str) -> Option<DlEvent> {
     })
 }
 
-fn build_args(req: &DownloadRequest) -> Vec<String> {
+fn build_args(req: &DownloadRequest, info_json: Option<&std::path::Path>) -> Vec<String> {
+    let template = output_template(req);
     let mut a: Vec<String> = Vec::new();
     let mut push = |s: &str| a.push(s.to_string());
 
@@ -447,12 +559,7 @@ fn build_args(req: &DownloadRequest) -> Vec<String> {
     push("-P");
     push(&req.output_dir);
     push("-o");
-    push(
-        req.filename_template
-            .as_deref()
-            .filter(|t| !t.trim().is_empty())
-            .unwrap_or("%(title).180B.%(ext)s"),
-    );
+    push(&template);
 
     push("-f");
     push(&req.format);
@@ -491,8 +598,16 @@ fn build_args(req: &DownloadRequest) -> Vec<String> {
         push("--sponsorblock-remove");
         push("sponsor,selfpromo,interaction");
     }
-    push("--");
-    push(&req.url);
+    match info_json {
+        Some(path) => {
+            push("--load-info-json");
+            push(&path.to_string_lossy());
+        }
+        None => {
+            push("--");
+            push(&req.url);
+        }
+    }
     a
 }
 
@@ -505,8 +620,16 @@ pub async fn start_download(
     std::fs::create_dir_all(&request.output_dir)
         .map_err(|e| format!("No se pudo crear la carpeta de destino: {e}"))?;
 
+    let info_json = match forced_ext(&request) {
+        Some(ext) => {
+            let cache = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+            Some(prepare_direct_info(cache, &request, &ext).await?)
+        }
+        None => None,
+    };
+
     let mut cmd = ytdlp(request.cookies_browser.as_deref());
-    cmd.args(build_args(&request));
+    cmd.args(build_args(&request, info_json.as_deref()));
     #[cfg(unix)]
     {
         // Own process group so cancelling also stops ffmpeg children.
@@ -566,6 +689,9 @@ pub async fn start_download(
         let stderr = err_task.await.unwrap_or_default();
         let jobs = app.state::<Jobs>();
         jobs.running.lock().await.remove(&id);
+        if let Some(path) = &info_json {
+            let _ = std::fs::remove_file(path);
+        }
         let was_cancelled = jobs.cancelled.lock().await.remove(&id);
 
         let event = if was_cancelled {
@@ -691,4 +817,52 @@ pub fn reveal_file(path: String) -> Result<(), String> {
 #[tauri::command]
 pub fn open_file(path: String) -> Result<(), String> {
     tauri_plugin_opener::open_path(path, None::<&str>).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn req(url: &str, ext: Option<&str>, title: Option<&str>) -> DownloadRequest {
+        serde_json::from_value(serde_json::json!({
+            "id": "t", "url": url, "format": "b", "outputDir": "/tmp",
+            "ext": ext, "title": title, "filenameTemplate": DEFAULT_TEMPLATE
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn template_adds_hash_before_extension() {
+        let t = output_template(&req("https://www.youtube.com/watch?v=abc", None, None));
+        assert!(t.starts_with("%(title).180B ["), "{t}");
+        assert!(t.ends_with("].%(ext)s"), "{t}");
+    }
+
+    #[test]
+    fn different_urls_get_different_names() {
+        let a = output_template(&req("https://site.com/get_file/1/a.mp4/?t=1", Some("mp4"), Some("a")));
+        let b = output_template(&req("https://site.com/get_file/2/b.mp4/?t=1", Some("mp4"), Some("a")));
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn direct_links_use_literal_title_and_ext_and_ignore_tokens() {
+        let a = output_template(&req("https://s.com/get_file/3114894_1080p.mp4/?tok=1", Some("mp4"), Some("3114894_1080p")));
+        let b = output_template(&req("https://s.com/get_file/3114894_1080p.mp4/?tok=2", Some("mp4"), Some("3114894_1080p")));
+        assert_eq!(a, b);
+        assert!(a.starts_with("3114894_1080p [") && a.ends_with("].%(ext)s"), "{a}");
+    }
+
+    #[test]
+    fn script_extensions_are_not_media() {
+        assert!(!is_media_ext("php"));
+        assert!(is_media_ext("MP4"));
+        assert_eq!(forced_ext(&req("https://s.com/x", Some("php"), None)), None);
+        assert_eq!(forced_ext(&req("https://s.com/x", Some("MP4"), None)).as_deref(), Some("mp4"));
+    }
+
+    #[test]
+    fn sanitizes_titles() {
+        assert_eq!(sanitize_filename("a/b:c?100%"), "a_b_c_100%%");
+    }
 }

@@ -99,6 +99,7 @@ export function buildVideoOptions(info: YtInfo, settings: Settings): QualityOpti
         size: est.size,
         approx: est.approx,
         height: f.height ?? undefined,
+        ext: f.ext,
       }
     })
   }
@@ -244,4 +245,22 @@ export function bestThumbnail(info: { thumbnail?: string | null; thumbnails?: { 
   if (info.thumbnail) return info.thumbnail
   const thumbs = info.thumbnails ?? []
   return thumbs.length ? [...thumbs].sort((a, b) => (b.width ?? 0) - (a.width ?? 0))[0].url : undefined
+}
+
+const MEDIA_FILE = /\.(mp4|m4v|mov|mkv|webm|flv|avi|ts|3gp|ogv|wmv|mpe?g|mp3|m4a|aac|ogg|opus|wav|flac)$/i
+
+/**
+ * Readable name for a direct file link, taken from the URL the user pasted
+ * (e.g. `.../3114894_1080p.mp4/?token=…` → `3114894_1080p`). The title yt-dlp
+ * reports for these is usually the CDN script name (`remote_control`).
+ */
+export function nameFromDirectUrl(url: string): string | undefined {
+  try {
+    const segments = new URL(url).pathname.split('/').filter(Boolean).map(decodeURIComponent)
+    const file = [...segments].reverse().find((s) => MEDIA_FILE.test(s)) ?? segments.at(-1)
+    const name = file?.replace(MEDIA_FILE, '').trim()
+    return name && !/\.(php|aspx?|jsp|cgi)$/i.test(name) ? name : undefined
+  } catch {
+    return undefined
+  }
 }
