@@ -2,9 +2,9 @@ import { Alert, Button, Card, Skeleton, Switch, Tabs, toast } from '@heroui/reac
 import { Download, Film, Music, Sparkles, Zap } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { formatBytes, looksLikeUrl, uid } from '../lib/format'
-import { bestThumbnail, buildAudioOptions, buildVideoOptions, nameFromDirectUrl } from '../lib/qualities'
+import { applyPreview, bestThumbnail, buildAudioOptions, buildVideoOptions, nameFromDirectUrl } from '../lib/qualities'
 import { buildRequest } from '../lib/request'
-import { fetchInfo, readClipboard } from '../lib/tauri'
+import { fetchInfo, probeMedia, readClipboard, type IncomingLink } from '../lib/tauri'
 import type { DownloadItem, MediaMode, Settings, YtInfo } from '../lib/types'
 import { useStore } from '../store'
 import { FolderPicker } from './FolderPicker'
@@ -30,9 +30,17 @@ const AUDIO_FORMATS: { value: Settings['audioFormat']; label: string }[] = [
   { value: 'wav', label: 'WAV' },
 ]
 
-export function DownloadView({ onShowDownloads }: { onShowDownloads: () => void }) {
+interface Props {
+  onShowDownloads: () => void
+  /** Link received from the browser extension (`streamline://`). */
+  incoming?: (IncomingLink & { nonce: number }) | null
+}
+
+export function DownloadView({ onShowDownloads, incoming }: Props) {
   const { settings, updateSettings, enqueue } = useStore()
   const [url, setUrl] = useState('')
+  const [referer, setReferer] = useState<string>()
+  const [probing, setProbing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<YtInfo | null>(null)
@@ -42,14 +50,15 @@ export function DownloadView({ onShowDownloads }: { onShowDownloads: () => void 
   const lastClipboard = useRef('')
 
   const analyze = useCallback(
-    async (target: string) => {
+    async (target: string, ref?: string) => {
       const seq = ++requestSeq.current
+      setReferer(ref)
       setLoading(true)
       setError(null)
       setInfo(null)
       setSelected(undefined)
       try {
-        const data = await fetchInfo(target, settings.cookiesBrowser)
+        const data = await fetchInfo(target, settings.cookiesBrowser, ref)
         if (seq !== requestSeq.current) return
         if (data.direct) {
           // yt-dlp names direct files after the CDN script (e.g. "remote_control").
@@ -59,6 +68,19 @@ export function DownloadView({ onShowDownloads }: { onShowDownloads: () => void 
         setInfo(data)
         const hasVideo = buildVideoOptions(data, settings).length > 0
         setMode(hasVideo ? 'video' : 'audio')
+
+        // Direct files come without thumbnail/duration: ask ffmpeg in the background.
+        if (data.direct && !data.thumbnail) {
+          setProbing(true)
+          probeMedia(data.webpage_url || target, ref)
+            .then((preview) => {
+              if (seq !== requestSeq.current) return
+              setInfo((cur) => (cur ? applyPreview(cur, preview) : cur))
+              if (preview.vcodec) setMode('video')
+            })
+            .catch(() => {})
+            .finally(() => seq === requestSeq.current && setProbing(false))
+        }
       } catch (e) {
         if (seq !== requestSeq.current) return
         setError(String(e))
@@ -68,6 +90,14 @@ export function DownloadView({ onShowDownloads }: { onShowDownloads: () => void 
     },
     [settings],
   )
+
+  // Links sent by the browser extension: paste and analyse automatically.
+  useEffect(() => {
+    if (!incoming) return
+    setUrl(incoming.url)
+    analyze(incoming.url, incoming.referer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incoming?.nonce])
 
   // Detect links copied to the clipboard when the window gains focus.
   useEffect(() => {
@@ -115,6 +145,7 @@ export function DownloadView({ onShowDownloads }: { onShowDownloads: () => void 
         remux: !!info.direct || info.extractor_key === 'Generic',
         ext: info.direct ? current.ext : undefined,
         title: info.direct ? info.title : undefined,
+        referer,
       }),
       status: 'queued',
       progress: 0,
@@ -179,7 +210,7 @@ export function DownloadView({ onShowDownloads }: { onShowDownloads: () => void 
             <Alert.Title>No se pudo analizar el enlace</Alert.Title>
             <Alert.Description className="selectable break-words">{error}</Alert.Description>
           </Alert.Content>
-          <Button size="sm" variant="danger-soft" onPress={() => analyze(url)}>
+          <Button size="sm" variant="danger-soft" onPress={() => analyze(url, referer)}>
             Reintentar
           </Button>
         </Alert>
@@ -189,7 +220,7 @@ export function DownloadView({ onShowDownloads }: { onShowDownloads: () => void 
 
       {info && !isPlaylist && (
         <>
-          <MediaCard info={info} />
+          <MediaCard info={info} loadingPreview={probing} />
 
           <Card className="gap-5 p-5">
             <div className="flex items-center justify-between gap-4">

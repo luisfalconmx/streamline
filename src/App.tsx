@@ -5,6 +5,7 @@ import { DownloadsView } from './components/DownloadsView'
 import { DownloadView } from './components/DownloadView'
 import { Logo } from './components/Logo'
 import { SettingsView } from './components/SettingsView'
+import { focusWindow, onDeepLink, type IncomingLink } from './lib/tauri'
 import { useStore } from './store'
 
 type View = 'download' | 'downloads' | 'settings'
@@ -14,6 +15,20 @@ export default function App() {
   const { activeCount } = useStore()
   const { resolvedTheme, setTheme } = useTheme('system')
   const mainRef = useRef<HTMLElement>(null)
+  const [incoming, setIncoming] = useState<(IncomingLink & { nonce: number }) | null>(null)
+
+  // `streamline://download?url=…` from the browser extension.
+  useEffect(() => {
+    let nonce = 0
+    const off = onDeepLink((link) => {
+      setView('download')
+      setIncoming({ ...link, nonce: ++nonce })
+      focusWindow()
+    })
+    return () => {
+      off.then((f) => f())
+    }
+  }, [])
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 })
   }, [view])
@@ -68,7 +83,7 @@ export default function App() {
       <main ref={mainRef} className="scroll-area relative flex-1 overflow-y-auto">
         {/* Keep the download view mounted so the analysed video survives tab switches. */}
         <div className={view === 'download' ? 'contents' : 'hidden'}>
-          <DownloadView onShowDownloads={() => setView('downloads')} />
+          <DownloadView onShowDownloads={() => setView('downloads')} incoming={incoming} />
         </div>
         {view === 'downloads' && <DownloadsView onNew={() => setView('download')} />}
         {view === 'settings' && <SettingsView />}

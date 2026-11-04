@@ -1,4 +1,4 @@
-import type { QualityOption, Settings, YtFormat, YtInfo } from './types'
+import type { MediaPreview, QualityOption, Settings, YtFormat, YtInfo } from './types'
 
 const AUDIO_EXTS = new Set(['m4a', 'mp3', 'opus', 'ogg', 'oga', 'wav', 'flac', 'aac', 'weba', 'mka', 'alac', 'aiff'])
 
@@ -146,6 +146,7 @@ export function buildVideoOptions(info: YtInfo, settings: Settings): QualityOpti
       format: `${selector}/bv*[height<=${h}]+ba/b[height<=${h}]/b`,
       size,
       approx: vEst.approx || aEst.approx,
+      ext: v.ext,
     })
   }
 
@@ -262,5 +263,27 @@ export function nameFromDirectUrl(url: string): string | undefined {
     return name && !/\.(php|aspx?|jsp|cgi)$/i.test(name) ? name : undefined
   } catch {
     return undefined
+  }
+}
+
+/** Merges an ffmpeg preview into the info of a direct link (single format). */
+export function applyPreview(info: YtInfo, p: MediaPreview): YtInfo {
+  const formats = (info.formats ?? []).map((f, i) =>
+    i === (info.formats?.length ?? 1) - 1
+      ? {
+          ...f,
+          width: f.width ?? p.width,
+          height: f.height ?? p.height,
+          fps: f.fps ?? p.fps,
+          vcodec: f.vcodec || p.vcodec || f.vcodec,
+          acodec: f.acodec || p.acodec || (p.vcodec ? 'none' : f.acodec),
+        }
+      : f,
+  )
+  return {
+    ...info,
+    thumbnail: info.thumbnail ?? p.thumbnail,
+    duration: info.duration ?? p.duration,
+    formats,
   }
 }

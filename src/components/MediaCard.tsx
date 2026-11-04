@@ -1,5 +1,5 @@
-import { Card, Chip } from '@heroui/react'
-import { Calendar, Clock, ExternalLink, Eye, ThumbsUp, User } from 'lucide-react'
+import { Card, Chip, Spinner } from '@heroui/react'
+import { Calendar, Clock, ExternalLink, Eye, Monitor, ThumbsUp, User } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { formatCount, formatDate, formatDuration } from '../lib/format'
 import { bestThumbnail } from '../lib/qualities'
@@ -15,7 +15,7 @@ function Meta({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   )
 }
 
-export function MediaCard({ info }: { info: YtInfo }) {
+export function MediaCard({ info, loadingPreview }: { info: YtInfo; loadingPreview?: boolean }) {
   const thumb = bestThumbnail(info)
   const author = info.uploader ?? info.channel
 
@@ -24,6 +24,11 @@ export function MediaCard({ info }: { info: YtInfo }) {
       <div className="relative aspect-video w-72 shrink-0 overflow-hidden rounded-xl bg-default">
         {thumb ? (
           <img src={thumb} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
+        ) : loadingPreview ? (
+          <div className="flex size-full flex-col items-center justify-center gap-2 text-sm text-muted">
+            <Spinner size="sm" />
+            Generando miniatura…
+          </div>
         ) : (
           <div className="flex size-full items-center justify-center text-muted">Sin miniatura</div>
         )}
@@ -56,6 +61,12 @@ export function MediaCard({ info }: { info: YtInfo }) {
           {info.view_count != null && <Meta icon={<Eye className="size-4" />}>{formatCount(info.view_count)} vistas</Meta>}
           {info.like_count != null && <Meta icon={<ThumbsUp className="size-4" />}>{formatCount(info.like_count)}</Meta>}
           {info.upload_date && <Meta icon={<Calendar className="size-4" />}>{formatDate(info.upload_date)}</Meta>}
+          {info.direct && info.formats?.at(-1)?.height ? (
+            <Meta icon={<Monitor className="size-4" />}>
+              {info.formats.at(-1)!.width}×{info.formats.at(-1)!.height}
+              {info.formats.at(-1)!.fps ? ` · ${Math.round(info.formats.at(-1)!.fps!)} fps` : ''}
+            </Meta>
+          ) : null}
         </div>
         {info.description && (
           <p className="selectable line-clamp-2 text-sm text-muted">{info.description}</p>

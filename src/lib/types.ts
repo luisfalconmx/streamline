@@ -143,6 +143,8 @@ export interface DownloadRequest {
   ext?: string
   /** Literal file name instead of yt-dlp's %(title)s */
   title?: string
+  /** Page the video was found on (browser extension) */
+  referer?: string
 }
 
 export type DownloadEvent =
@@ -185,4 +187,14 @@ export interface Settings {
   cookiesBrowser: string
   autoAnalyzeClipboard: boolean
   filenameTemplate: string
+}
+
+export interface MediaPreview {
+  thumbnail?: string | null
+  duration?: number | null
+  width?: number | null
+  height?: number | null
+  fps?: number | null
+  vcodec?: string | null
+  acodec?: string | null
 }

@@ -21,7 +21,23 @@
 - **Cola de descargas**: varias descargas simultáneas, con progreso, velocidad y tiempo restante; cancelar, reintentar, abrir el archivo o mostrarlo en la carpeta.
 - **Playlists**: elige qué videos descargar y en qué calidad.
 - **Extras**: subtítulos incrustados, capítulos, SponsorBlock y cookies del navegador para videos privados o con restricción de edad.
+- **Enlaces directos**: para archivos sueltos (`.mp4` de un CDN) genera la miniatura y lee duración, resolución y FPS con ffmpeg.
+- **Nombres sin choques**: cada archivo lleva un hash corto (`video [a1b2c3d4].mp4`), así que dos videos con el mismo título nunca se sobrescriben.
+- **Extensión de navegador** para Chrome, Brave y Edge (ver abajo).
 - **Tema claro y oscuro**, interfaz en español.
+
+## 🧩 Extensión para Chrome, Brave y Edge
+
+La extensión detecta los videos de la página que estás viendo: reproductores `<video>`, enlaces a archivos `.mp4`/`.webm` y streams HLS/DASH que pasan por la red. Los muestra como tarjetas con miniatura, tamaño, duración y resolución. El botón **Descargar en la app** abre Streamline con el enlace ya pegado y analizado, así que solo tienes que elegir la calidad y pulsar *Descargar*.
+
+**Instalación** (modo desarrollador, mientras no esté en la Chrome Web Store):
+
+1. Descarga `streamline-extension-x.y.z.zip` del [Release](https://github.com/luisfalconmx/streamline/releases) y descomprímelo.
+2. Abre `chrome://extensions` (en Brave `brave://extensions`, en Edge `edge://extensions`).
+3. Activa **Modo de desarrollador** y pulsa **Cargar descomprimida**. Elige la carpeta descomprimida.
+4. Fija el icono de Streamline en la barra. El número del icono indica cuántos videos encontró.
+
+La primera vez, el navegador te preguntará si quieres abrir Streamline: marca *Permitir siempre*.
 
 ## 📦 Instalación
 
@@ -63,6 +79,7 @@ streamline/
 │   ├── src/ytdlp.rs         # Ejecuta yt-dlp, parsea el progreso y emite eventos
 │   ├── binaries/            # Sidecars (se descargan con `pnpm sidecars`, no se versionan)
 │   └── tauri.conf.json
+├── extension/               # Extensión MV3 (Chrome/Brave/Edge)
 ├── scripts/fetch-sidecars.mjs
 ├── docker/ + compose.yaml   # Entorno de desarrollo con Docker Desktop
 └── .github/workflows/       # CI y release multiplataforma
@@ -119,7 +136,7 @@ pnpm tauri dev
 git tag v0.1.1 && git push origin v0.1.1
 ```
 
-3. Compila los `.dmg` de **macOS** (Apple Silicon e Intel) en tu Mac y súbelos al mismo Release (requiere Rust y `gh`):
+3. Compila los `.dmg` de **macOS** (Apple Silicon e Intel) en tu Mac y súbelos al mismo Release junto con el `.zip` de la extensión (requiere Rust y `gh`):
 
 ```bash
 pnpm release:mac

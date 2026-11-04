@@ -75,7 +75,7 @@ fn command(name: &str) -> Command {
 }
 
 /// A yt-dlp command pre-configured with the bundled helpers.
-fn ytdlp(cookies_browser: Option<&str>) -> Command {
+fn ytdlp(cookies_browser: Option<&str>, referer: Option<&str>) -> Command {
     let mut cmd = command("yt-dlp");
     cmd.args(["--ignore-config", "--no-warnings", "--no-color"]);
 
@@ -93,7 +93,15 @@ fn ytdlp(cookies_browser: Option<&str>) -> Command {
     if let Some(browser) = cookies_browser.filter(|b| !b.is_empty()) {
         cmd.arg("--cookies-from-browser").arg(browser);
     }
+    if let Some(r) = valid_http_url(referer) {
+        cmd.arg("--referer").arg(r);
+    }
     cmd
+}
+
+fn valid_http_url(s: Option<&str>) -> Option<&str> {
+    s.map(str::trim)
+        .filter(|u| (u.starts_with("http://") || u.starts_with("https://")) && !u.contains(char::is_whitespace))
 }
 
 fn last_error(stderr: &str) -> String {
@@ -154,8 +162,12 @@ fn slim(mut v: Value) -> Value {
 }
 
 #[tauri::command]
-pub async fn fetch_info(url: String, cookies_browser: Option<String>) -> Result<Value, String> {
-    let mut cmd = ytdlp(cookies_browser.as_deref());
+pub async fn fetch_info(
+    url: String,
+    cookies_browser: Option<String>,
+    referer: Option<String>,
+) -> Result<Value, String> {
+    let mut cmd = ytdlp(cookies_browser.as_deref(), referer.as_deref());
     cmd.args(["-J", "--flat-playlist", "--no-playlist", "--"]).arg(url.trim());
 
     let output = tokio::time::timeout(Duration::from_secs(120), cmd.output())
@@ -328,6 +340,126 @@ async fn probe_direct_formats(info: &mut Value) {
 }
 
 // ---------------------------------------------------------------------------
+// Media preview for direct links (thumbnail + technical metadata via ffmpeg)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaPreview {
+    /// `data:image/jpeg;base64,…`
+    thumbnail: Option<String>,
+    duration: Option<f64>,
+    width: Option<u32>,
+    height: Option<u32>,
+    fps: Option<f64>,
+    vcodec: Option<String>,
+    acodec: Option<String>,
+}
+
+/// The bundled ffmpeg uses OpenSSL and does not know where the OS keeps its
+/// trusted certificates, so point it at the system bundle when there is one.
+fn ca_bundle() -> Option<&'static str> {
+    [
+        "/etc/ssl/cert.pem",
+        "/etc/ssl/certs/ca-certificates.crt",
+        "/etc/pki/tls/certs/ca-bundle.crt",
+        "/etc/ssl/ca-bundle.pem",
+    ]
+    .into_iter()
+    .find(|p| std::path::Path::new(p).is_file())
+}
+
+fn parse_hms(s: &str) -> Option<f64> {
+    let mut parts = s.trim().split(':').rev();
+    let sec: f64 = parts.next()?.parse().ok()?;
+    let min: f64 = parts.next().unwrap_or("0").parse().ok()?;
+    let hour: f64 = parts.next().unwrap_or("0").parse().ok()?;
+    Some(hour * 3600.0 + min * 60.0 + sec)
+}
+
+/// Extracts duration and the first video/audio stream from ffmpeg's banner.
+fn parse_ffmpeg_banner(stderr: &str, p: &mut MediaPreview) {
+    // Only the input section; the output section describes our JPEG.
+    let input = stderr.split("Output #0").next().unwrap_or(stderr);
+    for line in input.lines().map(str::trim) {
+        if p.duration.is_none() {
+            if let Some(rest) = line.strip_prefix("Duration: ") {
+                p.duration = rest.split(',').next().and_then(parse_hms).filter(|d| *d > 0.0);
+            }
+        }
+        if p.vcodec.is_none() {
+            if let Some(rest) = line.split("Video: ").nth(1) {
+                p.vcodec = rest.split([' ', ',']).next().map(str::to_string);
+                if let Some(dim) = rest
+                    .split([' ', ','])
+                    .find(|t| t.contains('x') && t.split('x').all(|n| n.parse::<u32>().is_ok()))
+                {
+                    let mut it = dim.split('x').map(|n| n.parse::<u32>().ok());
+                    p.width = it.next().flatten();
+                    p.height = it.next().flatten();
+                }
+                p.fps = rest
+                    .split(", ")
+                    .find_map(|t| t.strip_suffix(" fps"))
+                    .and_then(|f| f.trim().parse().ok());
+            }
+        }
+        if p.acodec.is_none() {
+            if let Some(rest) = line.split("Audio: ").nth(1) {
+                p.acodec = rest.split([' ', ',']).next().map(str::to_string);
+            }
+        }
+    }
+}
+
+/// Grabs a frame and the technical metadata of a remote video with ffmpeg.
+/// Used for direct file links, which come without thumbnail or duration.
+#[tauri::command]
+pub async fn probe_media(url: String, referer: Option<String>) -> Result<MediaPreview, String> {
+    use base64::Engine as _;
+    let url = valid_http_url(Some(&url)).ok_or("URL inválida")?.to_string();
+
+    let run = |seek: &'static str| {
+        let mut cmd = command("ffmpeg");
+        cmd.args(["-hide_banner", "-nostdin", "-rw_timeout", "20000000"]);
+        if let Some(ca) = ca_bundle() {
+            cmd.args(["-ca_file", ca]);
+        }
+        if let Some(r) = valid_http_url(referer.as_deref()) {
+            cmd.arg("-headers").arg(format!("Referer: {r}\r\n"));
+        }
+        cmd.args(["-ss", seek, "-i"]).arg(&url).args([
+            "-frames:v", "1", "-vf", "scale=480:-2", "-q:v", "5", "-f", "image2pipe", "-vcodec", "mjpeg", "-",
+        ]);
+        tokio::time::timeout(Duration::from_secs(45), cmd.output())
+    };
+
+    let mut out = run("15")
+        .await
+        .map_err(|_| "Tiempo de espera agotado".to_string())?
+        .map_err(|e| e.to_string())?;
+    // Short clips: seeking past the end yields no frame, retry from the start.
+    if out.stdout.is_empty() {
+        if let Ok(Ok(o)) = run("0").await {
+            out = o;
+        }
+    }
+
+    let mut preview = MediaPreview::default();
+    parse_ffmpeg_banner(&String::from_utf8_lossy(&out.stderr), &mut preview);
+    if !out.stdout.is_empty() {
+        preview.thumbnail = Some(format!(
+            "data:image/jpeg;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(&out.stdout)
+        ));
+    }
+    if preview.thumbnail.is_none() && preview.duration.is_none() {
+        return Err(last_error(&String::from_utf8_lossy(&out.stderr)));
+    }
+    Ok(preview)
+}
+
+// ---------------------------------------------------------------------------
 // Downloads
 // ---------------------------------------------------------------------------
 
@@ -365,6 +497,8 @@ pub struct DownloadRequest {
     pub ext: Option<String>,
     /// Readable file name to use instead of `%(title)s` (direct links).
     pub title: Option<String>,
+    /// Page the video was found on (sent by the browser extension).
+    pub referer: Option<String>,
 }
 
 const DEFAULT_TEMPLATE: &str = "%(title).180B.%(ext)s";
@@ -430,7 +564,7 @@ fn forced_ext(req: &DownloadRequest) -> Option<String> {
 /// the file. Extract the info ourselves, put the real media extension in it and
 /// hand it back to yt-dlp with `--load-info-json`, keeping its safety checks on.
 async fn prepare_direct_info(cache_dir: PathBuf, req: &DownloadRequest, ext: &str) -> Result<PathBuf, String> {
-    let mut cmd = ytdlp(req.cookies_browser.as_deref());
+    let mut cmd = ytdlp(req.cookies_browser.as_deref(), req.referer.as_deref());
     cmd.args(["-J", "--no-playlist", "--"]).arg(&req.url);
     let output = tokio::time::timeout(Duration::from_secs(120), cmd.output())
         .await
@@ -628,7 +762,7 @@ pub async fn start_download(
         None => None,
     };
 
-    let mut cmd = ytdlp(request.cookies_browser.as_deref());
+    let mut cmd = ytdlp(request.cookies_browser.as_deref(), request.referer.as_deref());
     cmd.args(build_args(&request, info_json.as_deref()));
     #[cfg(unix)]
     {
@@ -859,6 +993,18 @@ mod tests {
         assert!(is_media_ext("MP4"));
         assert_eq!(forced_ext(&req("https://s.com/x", Some("php"), None)), None);
         assert_eq!(forced_ext(&req("https://s.com/x", Some("MP4"), None)).as_deref(), Some("mp4"));
+    }
+
+    #[test]
+    fn parses_ffmpeg_banner() {
+        let banner = "Input #0, mov,mp4, from 'x':\n  Duration: 00:36:06.33, start: 0.000000, bitrate: 7044 kb/s\n  Stream #0:0[0x1](eng): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], 6738 kb/s, 60 fps, 60 tbr, 15360 tbn (default)\n  Stream #0:1[0x2](eng): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo\nOutput #0, image2pipe, to 'pipe:':\n  Stream #0:0(eng): Video: mjpeg, yuv420p, 480x270, 60 fps\n";
+        let mut p = MediaPreview::default();
+        parse_ffmpeg_banner(banner, &mut p);
+        assert_eq!(p.duration.map(|d| d.round()), Some(2166.0));
+        assert_eq!((p.width, p.height), (Some(1920), Some(1080)));
+        assert_eq!(p.fps, Some(60.0));
+        assert_eq!(p.vcodec.as_deref(), Some("h264"));
+        assert_eq!(p.acodec.as_deref(), Some("aac"));
     }
 
     #[test]
