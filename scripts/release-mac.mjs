@@ -30,7 +30,8 @@ for (const [triple, arch] of targets) {
 }
 
 // Browser extension (Chrome/Brave/Edge), zipped for "Load unpacked".
-const zip = join(ROOT, 'src-tauri/target', `streamline-extension-${version}.zip`)
+const extVersion = JSON.parse(readFileSync(join(ROOT, 'extension/manifest.json'), 'utf8')).version
+const zip = join(ROOT, 'src-tauri/target', `streamline-extension-${extVersion}.zip`)
 run('rm', ['-f', zip])
 execFileSync('zip', ['-qr', zip, '.', '-x', '.*'], { cwd: join(ROOT, 'extension'), stdio: 'inherit' })
 
