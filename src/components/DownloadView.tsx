@@ -2,9 +2,16 @@ import { Alert, Button, Card, Skeleton, Switch, Tabs, toast } from '@heroui/reac
 import { Download, Film, Music, Sparkles, Zap } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { formatBytes, looksLikeUrl, uid } from '../lib/format'
-import { applyPreview, bestThumbnail, buildAudioOptions, buildVideoOptions, nameFromDirectUrl } from '../lib/qualities'
+import {
+  applyPreview,
+  bestThumbnail,
+  buildAudioOptions,
+  buildSourceOptions,
+  buildVideoOptions,
+  nameFromDirectUrl,
+} from '../lib/qualities'
 import { buildRequest } from '../lib/request'
-import { fetchInfo, probeMedia, readClipboard, type IncomingLink } from '../lib/tauri'
+import { fetchInfo, probeMedia, probeSizes, readClipboard, type IncomingLink, type SourceLink } from '../lib/tauri'
 import type { DownloadItem, MediaMode, Settings, YtInfo } from '../lib/types'
 import { useStore } from '../store'
 import { FolderPicker } from './FolderPicker'
@@ -40,6 +47,11 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
   const { settings, updateSettings, enqueue } = useStore()
   const [url, setUrl] = useState('')
   const [referer, setReferer] = useState<string>()
+  /** Web page title sent by the browser extension. */
+  const [pageTitle, setPageTitle] = useState<string>()
+  /** Every quality of the video sent by the extension (each is its own file). */
+  const [sources, setSources] = useState<SourceLink[]>()
+  const [analyzedUrl, setAnalyzedUrl] = useState('')
   const [probing, setProbing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -50,9 +62,12 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
   const lastClipboard = useRef('')
 
   const analyze = useCallback(
-    async (target: string, ref?: string) => {
+    async (target: string, ref?: string, title?: string, srcs?: SourceLink[]) => {
       const seq = ++requestSeq.current
       setReferer(ref)
+      setPageTitle(title)
+      setSources(srcs)
+      setAnalyzedUrl(target)
       setLoading(true)
       setError(null)
       setInfo(null)
@@ -65,9 +80,20 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
           const name = nameFromDirectUrl(target)
           if (name) data.title = name
         }
+        // From the extension: the page title names generic/direct videos (yt-dlp's
+        // own title is better for sites it knows, e.g. YouTube).
+        if (title && (data.direct || data.extractor_key === 'Generic')) data.title = title
         setInfo(data)
         const hasVideo = buildVideoOptions(data, settings).length > 0
         setMode(hasVideo ? 'video' : 'audio')
+
+        // Sizes the extension could not see: ask the server (HEAD) in the background.
+        if (srcs?.some((x) => !x.size)) {
+          probeSizes(srcs.map((x) => x.url), ref).then((sizes) => {
+            if (seq !== requestSeq.current) return
+            setSources((cur) => cur?.map((x, i) => (x.size ? x : { ...x, size: sizes[i] ?? undefined })))
+          })
+        }
 
         // Direct files come without thumbnail/duration: ask ffmpeg in the background.
         if (data.direct && !data.thumbnail) {
@@ -95,7 +121,7 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
   useEffect(() => {
     if (!incoming) return
     setUrl(incoming.url)
-    analyze(incoming.url, incoming.referer)
+    analyze(incoming.url, incoming.referer, incoming.title, incoming.sources)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incoming?.nonce])
 
@@ -121,16 +147,27 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
 
   const options = useMemo(() => {
     if (!info || isPlaylist) return []
+    if (mode === 'video' && sources && sources.length > 1) return buildSourceOptions(info, sources, analyzedUrl)
     return mode === 'video' ? buildVideoOptions(info, settings) : buildAudioOptions(info, settings)
-  }, [info, isPlaylist, mode, settings])
+  }, [info, isPlaylist, mode, settings, sources, analyzedUrl])
 
   const current = options.find((o) => o.key === selected) ?? options[0]
+
+  /** File name: "<Título>-1080p" for videos sent by the extension. */
+  const fileTitle = () => {
+    if (!info) return undefined
+    if (pageTitle) {
+      const res = mode === 'video' && current?.height ? `-${current.height}p` : ''
+      return `${info.title}${res}`
+    }
+    return info.direct ? info.title : undefined
+  }
 
   const download = () => {
     if (!info || !current) return
     const item: DownloadItem = {
       id: uid(),
-      url: info.webpage_url || url,
+      url: current.url ?? (info.webpage_url || url),
       title: info.title,
       thumbnail: bestThumbnail(info),
       uploader: info.uploader ?? info.channel,
@@ -138,13 +175,13 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
       qualityLabel: current.label,
       mode,
       estimatedSize: current.size,
-      request: buildRequest(info.webpage_url || url, current.format, mode, settings, {
+      request: buildRequest(current.url ?? (info.webpage_url || url), current.format, mode, settings, {
         format: current.audioFormat,
         quality: current.audioQuality,
       }, {
         remux: !!info.direct || info.extractor_key === 'Generic',
         ext: info.direct ? current.ext : undefined,
-        title: info.direct ? info.title : undefined,
+        title: fileTitle(),
         referer,
       }),
       status: 'queued',
@@ -210,7 +247,7 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
             <Alert.Title>No se pudo analizar el enlace</Alert.Title>
             <Alert.Description className="selectable break-words">{error}</Alert.Description>
           </Alert.Content>
-          <Button size="sm" variant="danger-soft" onPress={() => analyze(url, referer)}>
+          <Button size="sm" variant="danger-soft" onPress={() => analyze(url, referer, pageTitle, sources)}>
             Reintentar
           </Button>
         </Alert>

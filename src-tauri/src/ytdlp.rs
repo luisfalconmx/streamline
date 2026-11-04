@@ -282,6 +282,43 @@ async fn probe_url(client: &reqwest::Client, url: &str, headers: &serde_json::Ma
     Some(Probe { size, content_type: ct_of(&r) })
 }
 
+/// Sizes of several direct files (HEAD or 1-byte ranged GET), in parallel.
+/// Used for the quality list the browser extension sends.
+#[tauri::command]
+pub async fn probe_sizes(urls: Vec<String>, referer: Option<String>) -> Vec<Option<u64>> {
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::limited(8))
+        .build()
+    else {
+        return vec![None; urls.len()];
+    };
+    let mut headers = serde_json::Map::new();
+    if let Some(r) = valid_http_url(referer.as_deref()) {
+        headers.insert("Referer".into(), Value::String(r.to_string()));
+    }
+    let tasks = urls.into_iter().take(16).map(|u| {
+        let client = client.clone();
+        let headers = headers.clone();
+        async move {
+            let u = valid_http_url(Some(&u))?.to_string();
+            probe_url(&client, &u, &headers).await?.size
+        }
+    });
+    futures_join_all(tasks).await
+}
+
+async fn futures_join_all<F: std::future::Future<Output = Option<u64>> + Send + 'static>(
+    tasks: impl Iterator<Item = F>,
+) -> Vec<Option<u64>> {
+    let handles: Vec<_> = tasks.map(tokio::spawn).collect();
+    let mut out = Vec::with_capacity(handles.len());
+    for h in handles {
+        out.push(h.await.ok().flatten());
+    }
+    out
+}
+
 /// For the generic extractor yt-dlp often knows nothing about a direct file
 /// except its URL: no size, no codecs and sometimes no extension. Fill the gaps
 /// from the HTTP headers so the UI can show the size and the right media type.

@@ -28,16 +28,15 @@
 
 ## 🧩 Extensión para Chrome, Brave y Edge
 
-La extensión detecta los videos de la página que estás viendo: reproductores `<video>`, enlaces a archivos `.mp4`/`.webm` y streams HLS/DASH que pasan por la red. Los muestra como tarjetas con miniatura, tamaño, duración y resolución. El botón **Descargar en la app** abre Streamline con el enlace ya pegado y analizado, así que solo tienes que elegir la calidad y pulsar *Descargar*.
+La extensión detecta los videos de la página que estás viendo: reproductores `<video>`, enlaces a archivos `.mp4`/`.webm` y streams HLS/DASH. Agrupa todas las calidades del mismo video en **una sola tarjeta** (por ejemplo "4 calidades · hasta 4K"). El botón **Descargar en la app** envía todas las fuentes a Streamline, que muestra una opción por resolución (2160p60, 1080p, 720p…) para que elijas cuál descargar. El archivo se nombra `<Título de la página>-1080p [hash].mp4`.
 
-**Instalación** (modo desarrollador, mientras no esté en la Chrome Web Store):
+**Instalación:** la app incluye la extensión. La primera vez que abres Streamline aparece un asistente:
 
-1. Descarga `streamline-extension-x.y.z.zip` del [Release](https://github.com/luisfalconmx/streamline/releases) y descomprímelo.
-2. Abre `chrome://extensions` (en Brave `brave://extensions`, en Edge `edge://extensions`).
-3. Activa **Modo de desarrollador** y pulsa **Cargar descomprimida**. Elige la carpeta descomprimida.
-4. Fija el icono de Streamline en la barra. El número del icono indica cuántos videos encontró.
+1. Elige **Google Chrome** o **Brave**. La app copia la extensión a su carpeta de datos (`~/Library/Application Support/com.luisfalconmx.streamline/extension` en macOS, `%APPDATA%\com.luisfalconmx.streamline\extension` en Windows). En macOS además crea el acceso directo `~/Streamline Extension`.
+2. Pulsa **Abrir extensiones de…**. Streamline se queda como panel flotante con los pasos: activar *Modo de desarrollador*, *Cargar descomprimida* y elegir la carpeta (en macOS: ⌘⇧H → *Streamline Extension*).
+3. Al cargarla, el navegador pregunta *¿Abrir Streamline?*: marca **Permitir siempre**. La extensión avisa a la app y el asistente termina solo.
 
-La primera vez, el navegador te preguntará si quieres abrir Streamline: marca *Permitir siempre*.
+Si cierras el asistente, un aviso arriba de la app te recuerda instalarla hasta que se detecte. También está en **Ajustes → Extensión del navegador**. Chrome y Brave no permiten instalar extensiones de fuera de su tienda sin esa confirmación del usuario.
 
 ## 📦 Instalación
 

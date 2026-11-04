@@ -31,6 +31,8 @@ export const DEFAULT_SETTINGS: Settings = {
   cookiesBrowser: '',
   autoAnalyzeClipboard: true,
   filenameTemplate: '%(title).180B.%(ext)s',
+  extensionWizardDone: false,
+  extensionConfirmed: [],
 }
 
 function load<T>(key: string, fallback: T): T {
@@ -232,7 +234,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const updateSettings = useCallback((patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch })), [])
   const resetSettings = useCallback(
-    () => setSettings((s) => ({ ...DEFAULT_SETTINGS, outputDir: s.outputDir })),
+    () =>
+      setSettings((s) => ({
+        ...DEFAULT_SETTINGS,
+        outputDir: s.outputDir,
+        extensionWizardDone: s.extensionWizardDone,
+        extensionConfirmed: s.extensionConfirmed,
+      })),
     [],
   )
   const enqueue = useCallback((items: DownloadItem[]) => dispatch({ type: 'add', items }), [])

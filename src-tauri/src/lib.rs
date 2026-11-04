@@ -1,3 +1,4 @@
+mod extension;
 mod ytdlp;
 
 use tauri::Manager;
@@ -29,13 +30,25 @@ pub fn run() {
             #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
             let _ = app.deep_link().register_all();
 
+            // Links that arrived with the launch (cold start) and later ones.
+            if let Ok(Some(urls)) = app.deep_link().get_current() {
+                for url in &urls {
+                    extension::handle_deep_link(app.handle(), url);
+                }
+            }
             let handle = app.handle().clone();
-            app.deep_link().on_open_url(move |_event| focus_main(&handle));
+            app.deep_link().on_open_url(move |event| {
+                for url in event.urls() {
+                    extension::handle_deep_link(&handle, &url);
+                }
+                focus_main(&handle);
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             ytdlp::fetch_info,
             ytdlp::probe_media,
+            ytdlp::probe_sizes,
             ytdlp::start_download,
             ytdlp::cancel_download,
             ytdlp::default_download_dir,
@@ -43,6 +56,9 @@ pub fn run() {
             ytdlp::update_ytdlp,
             ytdlp::reveal_file,
             ytdlp::open_file,
+            extension::extension_status,
+            extension::install_extension,
+            extension::open_extensions_page,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Streamline");

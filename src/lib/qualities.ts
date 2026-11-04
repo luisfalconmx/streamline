@@ -287,3 +287,39 @@ export function applyPreview(info: YtInfo, p: MediaPreview): YtInfo {
     formats,
   }
 }
+
+/**
+ * One option per quality the browser extension found for the same video (each
+ * one is its own direct file). The analysed source (`analyzedUrl`) contributes
+ * its codec/fps/size from yt-dlp + ffmpeg.
+ */
+export function buildSourceOptions(
+  info: YtInfo,
+  sources: { url: string; quality?: number; size?: number }[],
+  analyzedUrl: string,
+): QualityOption[] {
+  const f = info.formats?.at(-1)
+  const ext = f?.ext && f.ext !== 'unknown_video' ? f.ext : 'mp4'
+  return [...sources]
+    .sort((a, b) => (b.quality ?? 0) - (a.quality ?? 0) || (b.size ?? 0) - (a.size ?? 0))
+    .map((s, i) => {
+      const analysed = s.url === analyzedUrl
+      const h = s.quality ?? (analysed ? (f?.height ?? undefined) : undefined)
+      const fps = analysed && f?.fps && f.fps > 30 ? Math.round(f.fps) : undefined
+      const est = analysed ? estimate(f, info.duration) : { size: undefined, approx: false }
+      return {
+        key: `src-${i}-${h ?? 'x'}`,
+        label: h ? `${h}p${fps ?? ''}` : `Calidad ${i + 1}`,
+        badge: resolutionBadge(h),
+        sublabel: [ext.toUpperCase(), analysed ? codecName(f?.vcodec ?? undefined) : '', fps ? `${fps} fps` : '']
+          .filter(Boolean)
+          .join(' · '),
+        format: 'b',
+        url: s.url,
+        size: s.size ?? est.size,
+        approx: !s.size && est.approx,
+        height: h,
+        ext,
+      }
+    })
+}

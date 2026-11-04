@@ -59,6 +59,39 @@ export function fileNameFromUrl(url) {
   }
 }
 
+/** Vertical resolution from a label/filename: "1080p", "_720p.mp4", "4K", "HD". */
+export function qualityOf(text) {
+  if (!text) return null
+  const t = String(text)
+  const m = t.match(/(?:^|[^0-9])(4320|2160|1440|1080|720|576|540|480|360|240|144)p?(?![0-9])/i)
+  if (m) return Number(m[1])
+  if (/\b8k\b/i.test(t)) return 4320
+  if (/\b(4k|uhd)\b/i.test(t)) return 2160
+  if (/\b(2k|qhd)\b/i.test(t)) return 1440
+  if (/\b(fhd|full ?hd)\b/i.test(t)) return 1080
+  if (/\bhd\b/i.test(t)) return 720
+  return null
+}
+
+const QUALITY_TOKEN = /[_\-. ]?(?:\d{3,4}p|4k|8k|2k|uhd|qhd|fhd|hd|sd|high|low|medium)(?=$|[_\-. ])/gi
+
+/**
+ * Key shared by every quality of the same video: the player it came from, or
+ * the file name without its resolution token (`3166239_1080p` → `3166239`).
+ */
+export function groupKey(item) {
+  const name = fileNameFromUrl(item.url).toLowerCase()
+  const base = name.replace(QUALITY_TOKEN, '').replace(/[_\-. ]+$/, '')
+  return `${hostOf(item.url)}|${base || name || item.url}`
+}
+
+export function qualityLabel(h) {
+  if (!h) return ''
+  if (h >= 4320) return '8K'
+  if (h >= 2160) return '4K'
+  return `${h}p`
+}
+
 export function formatBytes(bytes) {
   if (!bytes || bytes <= 0) return ''
   const u = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -80,9 +113,33 @@ export function formatDuration(s) {
   return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`
 }
 
+/** Which browser runs the extension: lets the app show "installed in Brave". */
+export async function browserId() {
+  try {
+    if (navigator.brave && (await navigator.brave.isBrave())) return 'brave'
+  } catch {
+    /* not Brave */
+  }
+  const brands = navigator.userAgentData?.brands?.map((b) => b.brand) ?? []
+  if (brands.some((b) => /Edge/i.test(b))) return 'edge'
+  if (brands.some((b) => /Opera/i.test(b))) return 'opera'
+  return 'chrome'
+}
+
 /** Deep link that opens the Streamline app with the URL pasted and analysed. */
-export function deepLink(url, referer) {
+export function deepLink(url, referer, title, browser, sources) {
   const p = new URLSearchParams({ url })
   if (referer && referer !== url) p.set('referer', referer)
+  if (title) p.set('title', title.slice(0, 180))
+  if (browser) p.set('browser', browser)
+  // Every quality of the same video: [{u: url, q: height, s: bytes}]
+  if (sources?.length > 1) {
+    p.set('sources', JSON.stringify(sources.slice(0, 12).map((x) => ({ u: x.url, q: x.quality || 0, s: x.size || 0 }))))
+  }
   return `streamline://download?${p}`
+}
+
+/** Tells the app the extension is installed in `browser`. */
+export function handshakeLink(browser, version) {
+  return `streamline://extension-installed?${new URLSearchParams({ browser, version })}`
 }

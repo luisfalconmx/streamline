@@ -83,6 +83,8 @@ export interface QualityOption {
   audioQuality?: string
   /** Container of the source file (direct links) */
   ext?: string
+  /** Separate URL for this quality (qualities sent by the browser extension) */
+  url?: string
 }
 
 export type DownloadStatus =
@@ -187,6 +189,10 @@ export interface Settings {
   cookiesBrowser: string
   autoAnalyzeClipboard: boolean
   filenameTemplate: string
+  /** The first-run extension wizard was shown and closed */
+  extensionWizardDone: boolean
+  /** Browsers whose extension confirmed itself via streamline://extension-installed */
+  extensionConfirmed: string[]
 }
 
 export interface MediaPreview {
@@ -197,4 +203,23 @@ export interface MediaPreview {
   fps?: number | null
   vcodec?: string | null
   acodec?: string | null
+}
+
+export interface BrowserStatus {
+  id: 'chrome' | 'brave'
+  name: string
+  available: boolean
+  extensionInstalled: boolean
+}
+
+export interface ExtensionStatus {
+  os: 'macos' | 'windows' | 'linux' | string
+  /** Real folder: <app data>/extension */
+  dir: string
+  /** macOS: visible shortcut ~/Streamline Extension */
+  shortcut?: string | null
+  bundledVersion?: string | null
+  copiedVersion?: string | null
+  browsers: BrowserStatus[]
+  anyInstalled: boolean
 }

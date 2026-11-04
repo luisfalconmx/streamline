@@ -99,6 +99,15 @@ chrome.webRequest.onHeadersReceived.addListener(
   ['responseHeaders'],
 )
 
+// --- First install: open the welcome page, which connects with the app ------
+
+chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+  if (reason !== 'install' && reason !== 'update') return
+  // On updates/reloads only if it never connected with the app before.
+  const { connected } = await chrome.storage.local.get('connected')
+  if (reason === 'install' || !connected) chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') })
+})
+
 // --- Messages from content scripts and the popup ---------------------------
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {

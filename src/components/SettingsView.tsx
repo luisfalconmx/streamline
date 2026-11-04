@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { openUrl, toolVersions, updateYtdlp } from '../lib/tauri'
 import type { Settings, ToolVersions } from '../lib/types'
+import { useExtension } from '../extension-state'
 import { useStore } from '../store'
 import { FolderPicker } from './FolderPicker'
 import { SimpleSelect } from './SimpleSelect'
@@ -11,6 +12,7 @@ const REPO = 'https://github.com/luisfalconmx/streamline'
 
 export function SettingsView() {
   const { settings, updateSettings, resetSettings } = useStore()
+  const ext = useExtension()
   const [versions, setVersions] = useState<ToolVersions>({})
   const [updating, setUpdating] = useState(false)
 
@@ -63,6 +65,26 @@ export function SettingsView() {
         </Row>
         <Row label="Detectar enlaces copiados" hint="Analiza automáticamente el enlace del portapapeles al volver a la app.">
           <Toggle isSelected={settings.autoAnalyzeClipboard} onChange={set('autoAnalyzeClipboard')} />
+        </Row>
+      </Group>
+
+      <Group title="Extensión del navegador">
+        <Row
+          label="Streamline para Chrome y Brave"
+          hint={ext.status?.shortcut ? `Carpeta: ${ext.status.shortcut}` : `Carpeta: ${ext.dir || '…'}`}
+        >
+          <div className="flex items-center gap-2">
+            {ext.status?.browsers
+              .filter((b) => b.available)
+              .map((b) => (
+                <Chip key={b.id} size="sm" variant="soft" color={b.extensionInstalled ? 'success' : 'default'}>
+                  {b.name} {b.extensionInstalled ? '✓' : '—'}
+                </Chip>
+              ))}
+            <Button size="sm" variant="secondary" onPress={ext.openWizard}>
+              {ext.status?.anyInstalled ? 'Reinstalar' : 'Instalar'}
+            </Button>
+          </div>
         </Row>
       </Group>
 
@@ -183,7 +205,7 @@ export function SettingsView() {
             <RefreshCw className="size-4" /> Buscar actualización
           </Button>
         </Row>
-        <Row label="Streamline 0.1.3" hint="Código abierto. Impulsado por yt-dlp.">
+        <Row label="Streamline 0.1.4" hint="Código abierto. Impulsado por yt-dlp.">
           <Button size="sm" variant="ghost" onPress={() => openUrl(REPO)}>
             GitHub
           </Button>

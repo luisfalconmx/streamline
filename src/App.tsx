@@ -1,34 +1,48 @@
-import { Button, Tabs, Toast, Tooltip, useTheme } from '@heroui/react'
+import { Button, Tabs, Toast, toast, Tooltip, useTheme } from '@heroui/react'
 import { Download, ListOrdered, Moon, Settings2, Sun } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { DownloadsView } from './components/DownloadsView'
+import { ExtensionBanner } from './components/ExtensionBanner'
+import { ExtensionWizard } from './components/ExtensionWizard'
 import { DownloadView } from './components/DownloadView'
 import { Logo } from './components/Logo'
 import { SettingsView } from './components/SettingsView'
+import { useExtension } from './extension-state'
 import { focusWindow, onDeepLink, type IncomingLink } from './lib/tauri'
 import { useStore } from './store'
 
 type View = 'download' | 'downloads' | 'settings'
+
+const BROWSER_NAMES: Record<string, string> = { brave: 'Brave', chrome: 'Google Chrome', edge: 'Microsoft Edge', opera: 'Opera' }
 
 export default function App() {
   const [view, setView] = useState<View>('download')
   const { activeCount } = useStore()
   const { resolvedTheme, setTheme } = useTheme('system')
   const mainRef = useRef<HTMLElement>(null)
+  const { markConfirmed } = useExtension()
   const [incoming, setIncoming] = useState<(IncomingLink & { nonce: number }) | null>(null)
 
   // `streamline://download?url=…` from the browser extension.
   useEffect(() => {
     let nonce = 0
     const off = onDeepLink((link) => {
+      if (link.browser) markConfirmed(link.browser)
+      if (link.kind === 'extension-installed') {
+        toast.success('Extensión conectada', {
+          description: `Streamline ya recibe videos desde ${BROWSER_NAMES[link.browser] ?? link.browser}.`,
+        })
+        focusWindow()
+        return
+      }
       setView('download')
-      setIncoming({ ...link, nonce: ++nonce })
+      setIncoming({ url: link.url, referer: link.referer, title: link.title, nonce: ++nonce })
       focusWindow()
     })
     return () => {
       off.then((f) => f())
     }
-  }, [])
+  }, [markConfirmed])
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 })
   }, [view])
@@ -80,6 +94,8 @@ export default function App() {
         </Tooltip>
       </header>
 
+      <ExtensionBanner />
+
       <main ref={mainRef} className="scroll-area relative flex-1 overflow-y-auto">
         {/* Keep the download view mounted so the analysed video survives tab switches. */}
         <div className={view === 'download' ? 'contents' : 'hidden'}>
@@ -89,6 +105,7 @@ export default function App() {
         {view === 'settings' && <SettingsView />}
       </main>
 
+      <ExtensionWizard />
       <Toast.Provider placement="bottom end" />
     </div>
   )
