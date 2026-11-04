@@ -113,13 +113,17 @@ pnpm tauri dev
 ## 🚀 Publicar una versión
 
 1. Actualiza `version` en `package.json`, `src-tauri/tauri.conf.json` y `src-tauri/Cargo.toml`.
-2. Crea y sube un tag:
+2. Crea y sube un tag. El workflow [`release.yml`](.github/workflows/release.yml) compila **Windows y Linux** en GitHub y crea el Release:
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.1.1 && git push origin v0.1.1
 ```
 
-El workflow [`release.yml`](.github/workflows/release.yml) compila en paralelo para macOS (Apple Silicon e Intel), Windows y Linux, y adjunta los instaladores al Release. También puedes lanzarlo a mano desde la pestaña **Actions**.
+3. Compila los `.dmg` de **macOS** (Apple Silicon e Intel) en tu Mac y súbelos al mismo Release (requiere Rust y `gh`):
+
+```bash
+pnpm release:mac
+```
 
 ## ⚖️ Licencias de terceros
 

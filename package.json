@@ -1,7 +1,7 @@
 {
   "name": "streamline",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,8 @@
     "app": "pnpm sidecars && tauri dev",
     "docker:web": "docker compose up web",
     "docker:desktop": "docker compose up desktop",
-    "docker:build": "docker compose run --rm build"
+    "docker:build": "docker compose run --rm build",
+    "release:mac": "node scripts/release-mac.mjs"
   },
   "dependencies": {
     "@heroui/react": "^3.2.7",

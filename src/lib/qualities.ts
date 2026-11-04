@@ -1,7 +1,19 @@
 import type { QualityOption, Settings, YtFormat, YtInfo } from './types'
 
-const hasVideo = (f: YtFormat) => !!f.vcodec && f.vcodec !== 'none'
-const hasAudio = (f: YtFormat) => !!f.acodec && f.acodec !== 'none'
+const AUDIO_EXTS = new Set(['m4a', 'mp3', 'opus', 'ogg', 'oga', 'wav', 'flac', 'aac', 'weba', 'mka', 'alac', 'aiff'])
+
+/**
+ * yt-dlp marks streams it knows lack video with `vcodec: "none"`. A missing codec
+ * (e.g. direct links handled by the generic extractor) means "unknown", so it is
+ * treated as video unless the container is an audio-only one.
+ */
+const hasVideo = (f: YtFormat) => {
+  if (f.vcodec === 'none') return false
+  if (f.vcodec) return true
+  return !AUDIO_EXTS.has((f.ext ?? '').toLowerCase())
+}
+/** Unknown audio codec counts as "probably has audio" (single muxed file). */
+const hasAudio = (f: YtFormat) => f.acodec !== 'none'
 
 function estimate(f: YtFormat | undefined, duration?: number | null) {
   if (!f) return { size: undefined as number | undefined, approx: false }
@@ -65,21 +77,30 @@ export function buildVideoOptions(info: YtInfo, settings: Settings): QualityOpti
   const audiosOnly = formats.filter((f) => hasAudio(f) && !hasVideo(f))
 
   if (!videos.length) {
-    if (formats.some(hasVideo) || !formats.length) {
-      const best = formats.at(-1)
-      const est = estimate(best ?? (info as unknown as YtFormat), duration)
-      return [
-        {
-          key: 'best',
-          label: 'Mejor calidad',
-          sublabel: best ? [best.ext, codecName(best.vcodec)].filter(Boolean).join(' · ') : 'Automático',
-          format: 'bv*+ba/b',
-          size: est.size,
-          approx: est.approx,
-        },
-      ]
+    // No resolution info (direct links, generic sites): offer each video-capable
+    // format as-is, best last in yt-dlp order → first here.
+    const candidates = formats.filter(hasVideo).reverse()
+    if (!candidates.length && formats.length) return []
+    if (!candidates.length) {
+      const est = estimate(info as unknown as YtFormat, duration)
+      return [{ key: 'best', label: 'Mejor calidad', sublabel: 'Automático', format: 'bv*+ba/b', size: est.size, approx: est.approx }]
     }
-    return []
+    return candidates.map((f, i) => {
+      const est = estimate(f, duration)
+      const separateAudio = !hasAudio(f) && audiosOnly.length > 0
+      return {
+        key: `fmt-${f.format_id}`,
+        label: f.height ? `${f.height}p` : i === 0 ? 'Calidad original' : (f.format_note ?? f.format_id),
+        badge: resolutionBadge(f.height),
+        sublabel: [(f.ext ?? '').toUpperCase(), codecName(f.vcodec), f.width && f.height ? `${f.width}×${f.height}` : '']
+          .filter(Boolean)
+          .join(' · ') || 'Archivo de video',
+        format: separateAudio ? `${f.format_id}+ba/${f.format_id}/b` : `${f.format_id}/b`,
+        size: est.size,
+        approx: est.approx,
+        height: f.height ?? undefined,
+      }
+    })
   }
 
   const audio = pickAudio(audiosOnly, settings.mergeFormat)

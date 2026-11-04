@@ -52,6 +52,8 @@ export interface YtInfo {
   thumbnails?: { url: string; width?: number; height?: number }[]
   description?: string | null
   is_live?: boolean
+  /** Set by the generic extractor for direct file links */
+  direct?: boolean
   formats?: YtFormat[]
   subtitle_langs?: string[]
   entries?: YtEntry[]
@@ -126,6 +128,7 @@ export interface DownloadRequest {
   audioFormat?: string
   audioQuality?: string
   mergeFormat?: string
+  remuxVideo?: boolean
   embedSubs: boolean
   subLangs?: string
   embedThumbnail: boolean

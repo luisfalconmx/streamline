@@ -106,7 +106,7 @@ export function DownloadView({ onShowDownloads }: { onShowDownloads: () => void 
       request: buildRequest(info.webpage_url || url, current.format, mode, settings, {
         format: current.audioFormat,
         quality: current.audioQuality,
-      }),
+      }, { remux: !!info.direct || info.extractor_key === 'Generic' }),
       status: 'queued',
       progress: 0,
       createdAt: Date.now(),

@@ -166,9 +166,153 @@ pub async fn fetch_info(url: String, cookies_browser: Option<String>) -> Result<
     if !output.status.success() {
         return Err(last_error(&String::from_utf8_lossy(&output.stderr)));
     }
-    let json: Value = serde_json::from_slice(&output.stdout)
+    let mut json: Value = serde_json::from_slice(&output.stdout)
         .map_err(|e| format!("Respuesta inválida de yt-dlp: {e}"))?;
+    probe_direct_formats(&mut json).await;
     Ok(slim(json))
+}
+
+// ---------------------------------------------------------------------------
+// HTTP probing for direct links
+// ---------------------------------------------------------------------------
+
+/// Maps a `Content-Type` to a file extension and whether it is audio-only.
+fn ext_from_content_type(ct: &str) -> Option<(&'static str, bool)> {
+    let ct = ct.split(';').next()?.trim().to_ascii_lowercase();
+    Some(match ct.as_str() {
+        "video/mp4" | "video/x-m4v" => ("mp4", false),
+        "video/webm" => ("webm", false),
+        "video/quicktime" => ("mov", false),
+        "video/x-matroska" => ("mkv", false),
+        "video/x-flv" => ("flv", false),
+        "video/x-msvideo" => ("avi", false),
+        "video/mp2t" => ("ts", false),
+        "video/3gpp" => ("3gp", false),
+        "video/ogg" => ("ogv", false),
+        "audio/mpeg" | "audio/mp3" => ("mp3", true),
+        "audio/mp4" | "audio/x-m4a" | "audio/aac" => ("m4a", true),
+        "audio/ogg" => ("ogg", true),
+        "audio/opus" => ("opus", true),
+        "audio/wav" | "audio/x-wav" | "audio/wave" => ("wav", true),
+        "audio/flac" | "audio/x-flac" => ("flac", true),
+        "audio/webm" => ("weba", true),
+        _ => return None,
+    })
+}
+
+struct Probe {
+    size: Option<u64>,
+    content_type: Option<String>,
+}
+
+/// HEAD request (falling back to a 1-byte ranged GET for servers that reject
+/// HEAD) to learn the real size and media type of a direct file.
+async fn probe_url(client: &reqwest::Client, url: &str, headers: &serde_json::Map<String, Value>) -> Option<Probe> {
+    let mut hm = reqwest::header::HeaderMap::new();
+    for (k, v) in headers {
+        if let (Ok(name), Some(Ok(val))) = (
+            reqwest::header::HeaderName::from_bytes(k.as_bytes()),
+            v.as_str().map(reqwest::header::HeaderValue::from_str),
+        ) {
+            hm.insert(name, val);
+        }
+    }
+    let ct_of = |r: &reqwest::Response| {
+        r.headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string)
+    };
+
+    if let Ok(r) = client.head(url).headers(hm.clone()).send().await {
+        if r.status().is_success() {
+            let size = r
+                .headers()
+                .get(reqwest::header::CONTENT_LENGTH)
+                .and_then(|v| v.to_str().ok()?.parse::<u64>().ok())
+                .filter(|n| *n > 0);
+            if size.is_some() {
+                return Some(Probe { size, content_type: ct_of(&r) });
+            }
+        }
+    }
+
+    let r = client
+        .get(url)
+        .headers(hm)
+        .header(reqwest::header::RANGE, "bytes=0-0")
+        .send()
+        .await
+        .ok()?;
+    if !r.status().is_success() {
+        return None;
+    }
+    // `Content-Range: bytes 0-0/12345`
+    let size = r
+        .headers()
+        .get(reqwest::header::CONTENT_RANGE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.rsplit('/').next())
+        .and_then(|n| n.parse::<u64>().ok())
+        .or_else(|| (r.status() == reqwest::StatusCode::OK).then(|| r.content_length()).flatten());
+    Some(Probe { size, content_type: ct_of(&r) })
+}
+
+/// For the generic extractor yt-dlp often knows nothing about a direct file
+/// except its URL: no size, no codecs and sometimes no extension. Fill the gaps
+/// from the HTTP headers so the UI can show the size and the right media type.
+async fn probe_direct_formats(info: &mut Value) {
+    let generic = info.get("extractor_key").and_then(Value::as_str) == Some("Generic")
+        || info.get("direct").and_then(Value::as_bool) == Some(true);
+    if !generic {
+        return;
+    }
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(Duration::from_secs(8))
+        .redirect(reqwest::redirect::Policy::limited(8))
+        .build()
+    else {
+        return;
+    };
+
+    let mut total: Option<u64> = None;
+    if let Some(Value::Array(formats)) = info.get_mut("formats") {
+        for f in formats.iter_mut().rev().take(4).filter_map(Value::as_object_mut) {
+            let known = f.get("filesize").is_some_and(|v| !v.is_null())
+                || f.get("filesize_approx").is_some_and(|v| !v.is_null());
+            let proto = f.get("protocol").and_then(Value::as_str).unwrap_or("https");
+            let Some(url) = f.get("url").and_then(Value::as_str).map(str::to_string) else { continue };
+            if known || !proto.starts_with("http") {
+                continue;
+            }
+            let headers = f
+                .get("http_headers")
+                .and_then(Value::as_object)
+                .cloned()
+                .unwrap_or_default();
+            let Some(p) = probe_url(&client, &url, &headers).await else { continue };
+
+            if let Some(size) = p.size {
+                f.insert("filesize".into(), size.into());
+                total = Some(total.map_or(size, |t| t.max(size)));
+            }
+            if let Some((ext, audio_only)) = p.content_type.as_deref().and_then(ext_from_content_type) {
+                let ext_missing = f
+                    .get("ext")
+                    .and_then(Value::as_str)
+                    .is_none_or(|e| e.is_empty() || e.starts_with("unknown"));
+                if ext_missing {
+                    f.insert("ext".into(), ext.into());
+                }
+                if f.get("vcodec").is_none_or(Value::is_null) && audio_only {
+                    f.insert("vcodec".into(), "none".into());
+                }
+            }
+        }
+    }
+    if let (Some(size), Some(obj)) = (total, info.as_object_mut()) {
+        obj.entry("filesize").or_insert(size.into());
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -189,6 +333,10 @@ pub struct DownloadRequest {
     pub audio_quality: Option<String>,
     /// Container used when merging video + audio (`mp4`, `mkv`, `webm`).
     pub merge_format: Option<String>,
+    /// Remux a single (non-merged) video file into `merge_format` — used for
+    /// direct links whose container may differ from the one the user picked.
+    #[serde(default)]
+    pub remux_video: bool,
     #[serde(default)]
     pub embed_subs: bool,
     pub sub_langs: Option<String>,
@@ -319,6 +467,12 @@ fn build_args(req: &DownloadRequest) -> Vec<String> {
         if let Some(mf) = req.merge_format.as_deref().filter(|s| !s.is_empty()) {
             push("--merge-output-format");
             push(mf);
+            // WebM only accepts VP8/VP9/AV1 + Vorbis/Opus, so remuxing an arbitrary
+            // direct file into it would fail; keep the original container instead.
+            if req.remux_video && mf != "webm" {
+                push("--remux-video");
+                push(mf);
+            }
         }
         if req.embed_subs {
             push("--embed-subs");

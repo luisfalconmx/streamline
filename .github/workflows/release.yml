@@ -1,7 +1,8 @@
 name: Release
 
-# Builds installable artifacts for macOS, Windows and Linux and attaches them
-# to a GitHub Release. Triggered by pushing a tag like `v0.1.0`, or manually.
+# Builds the Windows and Linux installers and attaches them to a GitHub Release.
+# The macOS .dmg files are built locally on Apple Silicon and uploaded with
+# `pnpm release:mac` (see README). Triggered by pushing a tag like `v0.1.1`.
 on:
   push:
     tags: ["v*"]
@@ -21,14 +22,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: macOS (Apple Silicon)
-            os: macos-latest
-            target: aarch64-apple-darwin
-            args: --target aarch64-apple-darwin
-          - name: macOS (Intel)
-            os: macos-latest
-            target: x86_64-apple-darwin
-            args: --target x86_64-apple-darwin
           - name: Windows (x64)
             os: windows-latest
             target: x86_64-pc-windows-msvc
