@@ -18,6 +18,11 @@ use tokio::{
 };
 
 const EVENT: &str = "download-event";
+
+/// YouTube clients that still answer when YouTube asks an anonymous connection
+/// to "confirm you're not a bot". They are limited to 360p, so they are only a
+/// fallback for users who don't want to use their browser session.
+const LIMITED_CLIENTS: [&str; 2] = ["--extractor-args", "youtube:player_client=tv_simply,mweb,android_vr"];
 const PROGRESS_PREFIX: &str = "SLP|";
 const POSTPROCESS_PREFIX: &str = "SLPP|";
 const FILE_PREFIX: &str = "SLFILE|";
@@ -58,7 +63,7 @@ fn tool_path(name: &str) -> (PathBuf, bool) {
     (PathBuf::from(file), false)
 }
 
-fn command(name: &str) -> Command {
+pub(crate) fn command(name: &str) -> Command {
     let (path, _) = tool_path(name);
     let mut cmd = Command::new(path);
     cmd.stdin(Stdio::null())
@@ -166,8 +171,12 @@ pub async fn fetch_info(
     url: String,
     cookies_browser: Option<String>,
     referer: Option<String>,
+    limited_clients: Option<bool>,
 ) -> Result<Value, String> {
     let mut cmd = ytdlp(cookies_browser.as_deref(), referer.as_deref());
+    if limited_clients.unwrap_or(false) {
+        cmd.args(LIMITED_CLIENTS);
+    }
     cmd.args(["-J", "--flat-playlist", "--no-playlist", "--"]).arg(url.trim());
 
     let output = tokio::time::timeout(Duration::from_secs(120), cmd.output())
@@ -395,7 +404,7 @@ pub struct MediaPreview {
 
 /// The bundled ffmpeg uses OpenSSL and does not know where the OS keeps its
 /// trusted certificates, so point it at the system bundle when there is one.
-fn ca_bundle() -> Option<&'static str> {
+pub(crate) fn ca_bundle() -> Option<&'static str> {
     [
         "/etc/ssl/cert.pem",
         "/etc/ssl/certs/ca-certificates.crt",
@@ -536,6 +545,9 @@ pub struct DownloadRequest {
     pub title: Option<String>,
     /// Page the video was found on (sent by the browser extension).
     pub referer: Option<String>,
+    /// Use the 360p fallback clients (see `LIMITED_CLIENTS`).
+    #[serde(default)]
+    pub limited_clients: bool,
 }
 
 const DEFAULT_TEMPLATE: &str = "%(title).180B.%(ext)s";
@@ -723,6 +735,9 @@ fn build_args(req: &DownloadRequest, info_json: Option<&std::path::Path>) -> Vec
     push("--fragment-retries");
     push("10");
 
+    if req.limited_clients {
+        LIMITED_CLIENTS.iter().for_each(|a| push(a));
+    }
     push("--no-playlist");
     push("--no-mtime");
     push("--continue");

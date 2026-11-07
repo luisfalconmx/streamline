@@ -1,6 +1,6 @@
 [package]
 name = "streamline"
-version = "0.1.4"
+version = "0.1.5"
 description = "Streamline — descarga videos sin límites usando yt-dlp"
 authors = ["luisfalconmx"]
 edition = "2021"
@@ -14,7 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-clipboard-manager = "2"
@@ -26,6 +26,9 @@ serde_json = "1"
 # Uses the OS TLS stack (Security.framework / SChannel / OpenSSL).
 reqwest = { version = "0.13", default-features = false, features = ["native-tls"] }
 tokio = { version = "1", features = ["process", "io-util", "sync", "macros", "rt-multi-thread", "time"] }
+
+[dev-dependencies]
+tauri = { version = "2", features = ["protocol-asset", "test"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

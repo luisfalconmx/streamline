@@ -1,3 +1,4 @@
+mod editor;
 mod extension;
 mod ytdlp;
 
@@ -57,6 +58,11 @@ pub fn run() {
             ytdlp::reveal_file,
             ytdlp::open_file,
             extension::extension_status,
+            editor::editor_open,
+            editor::editor_keyframes,
+            editor::editor_capture,
+            editor::editor_allow_file,
+            editor::editor_export,
             extension::install_extension,
             extension::open_extensions_page,
         ])

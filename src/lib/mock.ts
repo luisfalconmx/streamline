@@ -60,6 +60,9 @@ function formats(duration: number): YtFormat[] {
 
 export async function mockFetchInfo(url: string): Promise<YtInfo> {
   await new Promise((r) => setTimeout(r, 900))
+  if (url.includes('botcheck')) {
+    throw "[youtube] fo-DhrgQxl8: Sign in to confirm you're not a bot. Use --cookies-from-browser or --cookies for the authentication."
+  }
   if (url.includes('list=')) {
     return {
       _type: 'playlist',
@@ -127,4 +130,25 @@ export async function mockCancel(id: string) {
   clearInterval(timers.get(id))
   timers.delete(id)
   setTimeout(() => emit({ kind: 'cancelled', id }), 100)
+}
+
+/** Editor preview in the browser: plays `public/dev-sample.mp4` (git-ignored). */
+export async function mockEditorOpen(path: string) {
+  await new Promise((r) => setTimeout(r, 300))
+  return {
+    path,
+    previewPath: '/dev-sample.mp4',
+    fileName: 'Samus And Helena Vs Orcs-2160p [24cc9176].mp4',
+    container: 'mp4',
+    duration: 20,
+    size: 206_879_129,
+    width: 3840,
+    height: 2160,
+    fps: 60,
+    vcodec: 'h264',
+    acodec: 'aac',
+    title: 'Samus And Helena Vs Orcs [4K]',
+    coverPath: null,
+    coverSupported: true,
+  }
 }

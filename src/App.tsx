@@ -1,7 +1,8 @@
 import { Button, Tabs, Toast, toast, Tooltip, useTheme } from '@heroui/react'
-import { Download, ListOrdered, Moon, Settings2, Sun } from 'lucide-react'
+import { Download, ListOrdered, Moon, Scissors, Settings2, Sun } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { DownloadsView } from './components/DownloadsView'
+import { EditorView } from './components/editor/EditorView'
 import { ExtensionBanner } from './components/ExtensionBanner'
 import { ExtensionWizard } from './components/ExtensionWizard'
 import { DownloadView } from './components/DownloadView'
@@ -11,7 +12,7 @@ import { useExtension } from './extension-state'
 import { focusWindow, onDeepLink, type IncomingLink } from './lib/tauri'
 import { useStore } from './store'
 
-type View = 'download' | 'downloads' | 'settings'
+type View = 'download' | 'downloads' | 'editor' | 'settings'
 
 const BROWSER_NAMES: Record<string, string> = { brave: 'Brave', chrome: 'Google Chrome', edge: 'Microsoft Edge', opera: 'Opera' }
 
@@ -21,6 +22,11 @@ export default function App() {
   const { resolvedTheme, setTheme } = useTheme('system')
   const mainRef = useRef<HTMLElement>(null)
   const { markConfirmed } = useExtension()
+  const [editRequest, setEditRequest] = useState<{ path: string; nonce: number } | null>(null)
+  const openEditor = (path: string) => {
+    setEditRequest((r) => ({ path, nonce: (r?.nonce ?? 0) + 1 }))
+    setView('editor')
+  }
   const [incoming, setIncoming] = useState<(IncomingLink & { nonce: number }) | null>(null)
 
   // `streamline://download?url=…` from the browser extension.
@@ -71,6 +77,10 @@ export default function App() {
                 )}
                 <Tabs.Indicator />
               </Tabs.Tab>
+              <Tabs.Tab id="editor">
+                <Scissors className="mr-1.5 size-4" /> Editor
+                <Tabs.Indicator />
+              </Tabs.Tab>
               <Tabs.Tab id="settings">
                 <Settings2 className="mr-1.5 size-4" /> Ajustes
                 <Tabs.Indicator />
@@ -101,7 +111,11 @@ export default function App() {
         <div className={view === 'download' ? 'contents' : 'hidden'}>
           <DownloadView onShowDownloads={() => setView('downloads')} incoming={incoming} />
         </div>
-        {view === 'downloads' && <DownloadsView onNew={() => setView('download')} />}
+        {view === 'downloads' && <DownloadsView onNew={() => setView('download')} onEdit={openEditor} />}
+        {/* Kept mounted so an open edit survives switching tabs. */}
+        <div className={view === 'editor' ? 'contents' : 'hidden'}>
+          <EditorView request={editRequest} />
+        </div>
         {view === 'settings' && <SettingsView />}
       </main>
 

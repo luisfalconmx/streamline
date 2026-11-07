@@ -11,7 +11,16 @@ import {
   nameFromDirectUrl,
 } from '../lib/qualities'
 import { buildRequest } from '../lib/request'
-import { fetchInfo, probeMedia, probeSizes, readClipboard, type IncomingLink, type SourceLink } from '../lib/tauri'
+import {
+  fetchInfo,
+  isBotCheck,
+  probeMedia,
+  probeSizes,
+  readClipboard,
+  type IncomingLink,
+  type SourceLink,
+} from '../lib/tauri'
+import { useExtension } from '../extension-state'
 import type { DownloadItem, MediaMode, Settings, YtInfo } from '../lib/types'
 import { useStore } from '../store'
 import { FolderPicker } from './FolderPicker'
@@ -52,6 +61,9 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
   /** Every quality of the video sent by the extension (each is its own file). */
   const [sources, setSources] = useState<SourceLink[]>()
   const [analyzedUrl, setAnalyzedUrl] = useState('')
+  /** Analysed with YouTube's 360p fallback clients (no browser session). */
+  const [limited, setLimited] = useState(false)
+  const { status: extStatus } = useExtension()
   const [probing, setProbing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -62,8 +74,15 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
   const lastClipboard = useRef('')
 
   const analyze = useCallback(
-    async (target: string, ref?: string, title?: string, srcs?: SourceLink[]) => {
+    async (
+      target: string,
+      ref?: string,
+      title?: string,
+      srcs?: SourceLink[],
+      opts: { cookies?: string; limited?: boolean } = {},
+    ) => {
       const seq = ++requestSeq.current
+      setLimited(!!opts.limited)
       setReferer(ref)
       setPageTitle(title)
       setSources(srcs)
@@ -73,7 +92,7 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
       setInfo(null)
       setSelected(undefined)
       try {
-        const data = await fetchInfo(target, settings.cookiesBrowser, ref)
+        const data = await fetchInfo(target, opts.cookies ?? settings.cookiesBrowser, ref, opts.limited)
         if (seq !== requestSeq.current) return
         if (data.direct) {
           // yt-dlp names direct files after the CDN script (e.g. "remote_control").
@@ -183,6 +202,7 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
         ext: info.direct ? current.ext : undefined,
         title: fileTitle(),
         referer,
+        limited,
       }),
       status: 'queued',
       progress: 0,
@@ -240,17 +260,61 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
 
       {loading && <LoadingCard />}
 
-      {error && (
+      {error && isBotCheck(error) && (
+        <Alert status="warning">
+          <Alert.Indicator />
+          <Alert.Content className="gap-2">
+            <Alert.Title>YouTube pide confirmar que no eres un robot</Alert.Title>
+            <Alert.Description>
+              YouTube marcó tu conexión por hacer muchas solicitudes. Usa tu sesión de YouTube del navegador para
+              obtener todas las calidades, o sigue sin sesión con un máximo de 360p.
+              {settings.cookiesBrowser ? ` Ahora se usa la sesión de ${BROWSER_LABEL[settings.cookiesBrowser] ?? settings.cookiesBrowser}.` : ''}
+            </Alert.Description>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {(extStatus?.browsers ?? [])
+                .filter((b) => b.available)
+                .map((b) => (
+                  <Button
+                    key={b.id}
+                    size="sm"
+                    onPress={() => {
+                      updateSettings({ cookiesBrowser: b.id })
+                      analyze(url, referer, pageTitle, sources, { cookies: b.id })
+                    }}
+                  >
+                    Usar mi sesión de {b.name}
+                  </Button>
+                ))}
+              <Button size="sm" variant="tertiary" onPress={() => analyze(url, referer, pageTitle, sources, { limited: true })}>
+                Seguir sin sesión (máx. 360p)
+              </Button>
+            </div>
+            <p className="text-xs text-muted">
+              Necesitas haber iniciado sesión en YouTube en ese navegador. macOS puede pedirte permiso para leer sus datos
+              (acceso al llavero): pulsa <b>Permitir siempre</b>.
+            </p>
+          </Alert.Content>
+        </Alert>
+      )}
+
+      {error && !isBotCheck(error) && (
         <Alert status="danger">
           <Alert.Indicator />
           <Alert.Content>
             <Alert.Title>No se pudo analizar el enlace</Alert.Title>
-            <Alert.Description className="selectable break-words">{error}</Alert.Description>
+            <Alert.Description className="selectable break-words">{friendlyError(error, settings.cookiesBrowser)}</Alert.Description>
           </Alert.Content>
-          <Button size="sm" variant="danger-soft" onPress={() => analyze(url, referer, pageTitle, sources)}>
+          <Button size="sm" variant="danger-soft" onPress={() => analyze(url, referer, pageTitle, sources, { limited })}>
             Reintentar
           </Button>
         </Alert>
+      )}
+
+      {limited && info && (
+        <p className="-mt-2 text-xs text-warning">
+          Analizado sin sesión de YouTube: calidad máxima 360p. Para más calidad, usa tu sesión del navegador en Ajustes →
+          Cookies del navegador.
+        </p>
       )}
 
       {info && isPlaylist && <PlaylistPanel info={info} onQueued={onShowDownloads} />}
@@ -347,6 +411,28 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
       )}
     </div>
   )
+}
+
+const BROWSER_LABEL: Record<string, string> = {
+  brave: 'Brave',
+  chrome: 'Google Chrome',
+  firefox: 'Firefox',
+  safari: 'Safari',
+  edge: 'Microsoft Edge',
+  opera: 'Opera',
+  vivaldi: 'Vivaldi',
+}
+
+/** Turns cookie/permission failures into something actionable. */
+function friendlyError(error: string, browser?: string): string {
+  const name = browser ? (BROWSER_LABEL[browser] ?? browser) : 'el navegador'
+  if (browser && /Operation not permitted|Permission denied|PermissionError/i.test(error)) {
+    return `macOS no dejó a Streamline leer la sesión de ${name}. Abre Ajustes del Sistema → Privacidad y seguridad → Acceso total al disco, activa Streamline y vuelve a intentarlo. (${error})`
+  }
+  if (browser && /could not find .*cookies|cookies database|Failed to decrypt|keyring|keychain/i.test(error)) {
+    return `No se pudo leer la sesión de ${name}: cierra ${name} por completo y vuelve a intentarlo, o elige otro navegador en Ajustes → Cookies del navegador. (${error})`
+  }
+  return error
 }
 
 function Toggle({ label, isSelected, onChange }: { label: string; isSelected: boolean; onChange: (v: boolean) => void }) {

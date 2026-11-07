@@ -147,6 +147,8 @@ export interface DownloadRequest {
   title?: string
   /** Page the video was found on (browser extension) */
   referer?: string
+  /** YouTube 360p fallback clients (no browser session) */
+  limitedClients?: boolean
 }
 
 export type DownloadEvent =

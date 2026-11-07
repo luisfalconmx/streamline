@@ -23,6 +23,8 @@
 - **Extras**: subtítulos incrustados, capítulos, SponsorBlock y cookies del navegador para videos privados o con restricción de edad.
 - **Enlaces directos**: para archivos sueltos (`.mp4` de un CDN) genera la miniatura y lee duración, resolución y FPS con ffmpeg.
 - **Nombres sin choques**: cada archivo lleva un hash corto (`video [a1b2c3d4].mp4`), así que dos videos con el mismo título nunca se sobrescriben.
+- **Editor de video**: elimina partes con cortes múltiples, cambia el título y la portada (captura un fotograma a resolución completa) y guarda como copia o sobre el original. Los cortes son **sin pérdida**: no recodifican, así que un 4K sigue siendo exactamente el mismo 4K. Opcionalmente, corte exacto al fotograma recodificando en alta calidad.
+- **YouTube con tu sesión**: si YouTube pide confirmar que no eres un robot, un clic usa tu sesión de Brave o Chrome (todas las calidades) o sigue sin sesión hasta 360p.
 - **Extensión de navegador** para Chrome, Brave y Edge (ver abajo).
 - **Tema claro y oscuro**, interfaz en español.
 

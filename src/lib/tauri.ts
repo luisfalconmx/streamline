@@ -10,11 +10,24 @@ function notInTauri(): never {
   throw new Error('Streamline debe ejecutarse dentro de la app de escritorio (pnpm tauri dev).')
 }
 
-export async function fetchInfo(url: string, cookiesBrowser?: string, referer?: string): Promise<YtInfo> {
+export async function fetchInfo(
+  url: string,
+  cookiesBrowser?: string,
+  referer?: string,
+  limitedClients = false,
+): Promise<YtInfo> {
   if (mockMode()) return (await import('./mock')).mockFetchInfo(url)
   if (!isTauri()) notInTauri()
-  return invoke<YtInfo>('fetch_info', { url, cookiesBrowser: cookiesBrowser || null, referer: referer || null })
+  return invoke<YtInfo>('fetch_info', {
+    url,
+    cookiesBrowser: cookiesBrowser || null,
+    referer: referer || null,
+    limitedClients,
+  })
 }
+
+/** YouTube's "Sign in to confirm you're not a bot" (flagged connection). */
+export const isBotCheck = (error: string) => /confirm you.?re not a bot|not a bot/i.test(error)
 
 /** Real sizes of several direct files (HEAD requests in Rust). */
 export async function probeSizes(urls: string[], referer?: string): Promise<(number | null)[]> {
@@ -297,4 +310,99 @@ export async function setFloatingGuide(on: boolean): Promise<void> {
   } catch (e) {
     console.warn('floating guide', e)
   }
+}
+
+// --- Video editor ------------------------------------------------------------
+
+export interface EditorMedia {
+  path: string
+  /** What the <video> element plays (remuxed copy for MKV & co.) */
+  previewPath?: string | null
+  fileName: string
+  container: string
+  duration: number
+  size?: number | null
+  width?: number | null
+  height?: number | null
+  fps?: number | null
+  vcodec?: string | null
+  acodec?: string | null
+  title?: string | null
+  /** Embedded cover extracted to a temporary image */
+  coverPath?: string | null
+  coverSupported: boolean
+}
+
+export interface EditorExportRequest {
+  jobId: string
+  path: string
+  /** Parts to keep, in seconds */
+  keep: [number, number][]
+  title?: string
+  coverPath?: string
+  precise: boolean
+  saveAs: 'copy' | 'original'
+}
+
+export interface EditorProgress {
+  jobId: string
+  progress: number
+  stage: string
+}
+
+/** URL the webview can load for a local file (asset protocol). */
+export async function fileSrc(path: string): Promise<string> {
+  if (!isTauri()) return path
+  const { convertFileSrc } = await import('@tauri-apps/api/core')
+  return convertFileSrc(path)
+}
+
+export async function editorOpen(path: string): Promise<EditorMedia> {
+  if (mockMode()) return (await import('./mock')).mockEditorOpen(path)
+  if (!isTauri()) notInTauri()
+  return invoke<EditorMedia>('editor_open', { path })
+}
+
+export async function editorKeyframes(path: string): Promise<number[]> {
+  if (mockMode()) return Array.from({ length: 10 }, (_, i) => i * 2)
+  if (!isTauri()) return []
+  return invoke<number[]>('editor_keyframes', { path })
+}
+
+/** Full-resolution frame at `time`, saved as JPEG; returns its path. */
+export async function editorCapture(path: string, time: number): Promise<string> {
+  if (!isTauri()) notInTauri()
+  return invoke<string>('editor_capture', { path, time })
+}
+
+export async function editorExport(request: EditorExportRequest): Promise<string> {
+  if (!isTauri()) notInTauri()
+  return invoke<string>('editor_export', { request })
+}
+
+export function onEditorProgress(handler: (p: EditorProgress) => void): Promise<UnlistenFn> {
+  if (!isTauri()) return Promise.resolve(() => {})
+  return listen<EditorProgress>('editor-progress', (e) => handler(e.payload))
+}
+
+export async function pickVideoFile(defaultPath?: string): Promise<string | null> {
+  if (mockMode()) return '/Users/demo/Downloads/Streamline/demo.mp4'
+  if (!isTauri()) return null
+  const { open } = await import('@tauri-apps/plugin-dialog')
+  const r = await open({
+    multiple: false,
+    defaultPath,
+    filters: [{ name: 'Videos', extensions: ['mp4', 'm4v', 'mov', 'mkv', 'webm', 'avi', 'flv'] }],
+  })
+  return typeof r === 'string' ? r : null
+}
+
+/** Picks a cover image and lets the webview display it. */
+export async function pickImageFile(): Promise<string | null> {
+  if (!isTauri()) return null
+  const { open } = await import('@tauri-apps/plugin-dialog')
+  const r = await open({ multiple: false, filters: [{ name: 'Imágenes', extensions: ['jpg', 'jpeg', 'png', 'webp'] }] })
+  if (typeof r !== 'string') return null
+  await invoke('editor_allow_file', { path: r })
+  return r
 }
