@@ -1,6 +1,6 @@
 [package]
 name = "streamline"
-version = "0.1.5"
+version = "1.0.0"
 description = "Streamline — descarga videos sin límites usando yt-dlp"
 authors = ["luisfalconmx"]
 edition = "2021"
