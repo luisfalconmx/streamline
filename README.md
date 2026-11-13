@@ -15,7 +15,7 @@
 
 ## ✨ Funciones
 
-- **Pega y descarga**: pega un enlace (o cópialo y vuelve a la app, se detecta solo) y elige la calidad.
+- **Pega y descarga**: pega un enlace (o usa el botón **Pegar**) y elige la calidad.
 - **Toda la información antes de descargar**: título, canal, duración, vistas, fecha, miniatura y el **peso estimado** de cada calidad.
 - **Todas las resoluciones**: de 144p a 8K, con FPS altos (60 fps) y HDR cuando existen. Contenedor MP4, MKV o WebM.
 - **Solo audio**: MP3, M4A, Opus, FLAC o WAV, con carátula y metadatos.
@@ -27,8 +27,10 @@
 - **Renombrar antes de descargar**: el nombre del archivo se puede editar en la misma pantalla de calidades.
 - **Enlaces directos**: para archivos sueltos (`.mp4` de un CDN) genera la miniatura y lee duración, resolución y FPS con ffmpeg.
 - **Nombres sin choques**: cada archivo lleva un hash corto (`video [a1b2c3d4].mp4`), así que dos videos con el mismo título nunca se sobrescriben.
-- **YouTube con tu sesión**: si YouTube pide confirmar que no eres un robot, un clic usa tu sesión de Brave o Chrome (todas las calidades) o sigue sin sesión hasta 360p.
-- **Tema claro y oscuro**, interfaz en español.
+- **YouTube con tu sesión**: si YouTube pide confirmar que no eres un robot, un clic usa tu sesión de Chrome, Brave, Firefox, Edge o Safari (todas las calidades) o sigue sin sesión hasta 360p.
+- **Sin archivos temporales a la vista**: fragmentos, `.part` y `.ytdl` se guardan en la carpeta de caché de la app; en tu carpeta (Descargas por defecto) solo aparece el archivo final. Si cancelas, los temporales se borran.
+- **Actualizaciones con un clic**: cuando hay una versión nueva aparece el botón **Actualizar** (ver abajo).
+- **Diseño oscuro**, interfaz en español.
 
 ## 📦 Instalación
 
@@ -74,7 +76,7 @@ streamline/
 │   ├── binaries/            # Sidecars (se descargan con `pnpm sidecars`, no se versionan)
 │   └── tauri.conf.json
 ├── scripts/                 # Sidecars y publicación (release-*.mjs: instaladores sin versión + latest.json)
-├── landing/               # Página de presentación (Vercel, raíz del proyecto: landing/)
+├── landing/                 # Página de presentación (Vercel, raíz del proyecto: landing/)
 ├── docker/ + compose.yaml   # Entorno de desarrollo con Docker Desktop
 └── .github/workflows/       # CI y release multiplataforma
 ```
@@ -145,6 +147,10 @@ git tag v1.0.0 && git push origin v1.0.0
 ```bash
 pnpm release:mac
 ```
+
+## 🌐 Landing page
+
+La página de presentación es un sitio estático en [`landing/`](landing) (sin compilación). Detecta el sistema del visitante para el botón de descarga y lee la versión y el peso de los instaladores del último Release, así que no hay que tocarla al publicar versiones. Vercel la publica sola con cada push a `main` (el proyecto usa `landing/` como raíz).
 
 ## ⚖️ Licencias de terceros
 
