@@ -1,8 +1,12 @@
 name: Release
 
-# Builds the Windows and Linux installers and attaches them to a GitHub Release.
-# The macOS .dmg files are built locally on Apple Silicon and uploaded with
-# `pnpm release:mac` (see README). Triggered by pushing a tag like `v0.1.1`.
+# Builds the Windows and Linux installers, signs their update packages and
+# publishes them (with version-less names and the updater's latest.json) to the
+# GitHub Release. macOS is built locally with `pnpm release:mac` (see README).
+# Triggered by pushing a tag like `v1.0.0`.
+#
+# Needs the repository secret TAURI_SIGNING_PRIVATE_KEY (contents of
+# ~/.tauri/streamline.key) to sign the updates.
 on:
   push:
     tags: ["v*"]
@@ -25,11 +29,9 @@ jobs:
           - name: Windows (x64)
             os: windows-latest
             target: x86_64-pc-windows-msvc
-            args: --target x86_64-pc-windows-msvc
           - name: Linux (x64)
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            args: --target x86_64-unknown-linux-gnu
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -62,27 +64,39 @@ jobs:
       - name: Download sidecars (yt-dlp, ffmpeg, ffprobe, deno)
         run: node scripts/fetch-sidecars.mjs ${{ matrix.target }}
 
-      - name: Build and publish
-        uses: tauri-apps/tauri-action@v1
+      - name: Build (signed update packages)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: pnpm tauri build --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
+
+      - name: Rename installers
+        run: node scripts/release-collect.mjs ${{ matrix.target }} release-out
+
+      - uses: actions/upload-artifact@v7
         with:
-          tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
-          releaseName: Streamline ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
-          releaseBody: |
-            ## Descargas
+          name: release-${{ matrix.target }}
+          path: release-out
+          if-no-files-found: error
 
-            | Sistema | Archivo |
-            | --- | --- |
-            | macOS (Apple Silicon M1–M4) | `Streamline_*_aarch64.dmg` |
-            | macOS (Intel) | `Streamline_*_x64.dmg` |
-            | Windows | `Streamline_*_x64-setup.exe` o `.msi` |
-            | Linux | `.AppImage`, `.deb` o `.rpm` |
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
 
-            **macOS:** la app no está firmada con un certificado de Apple. Si macOS dice que está dañada, ejecuta
-            `xattr -cr /Applications/Streamline.app` una vez tras instalarla.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
 
-            **Windows:** si SmartScreen la bloquea, pulsa «Más información» → «Ejecutar de todas formas».
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
+      - uses: actions/download-artifact@v8
+        with:
+          path: release-out
+          pattern: release-*
+          merge-multiple: true
+
+      - name: Upload installers and latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/release-publish.mjs release-out

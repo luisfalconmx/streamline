@@ -5,6 +5,7 @@ import { DownloadsView } from './components/DownloadsView'
 import { DownloadView } from './components/DownloadView'
 import { Logo } from './components/Logo'
 import { SettingsView } from './components/SettingsView'
+import { UpdateButton } from './components/UpdateButton'
 import { useStore } from './store'
 
 type View = 'download' | 'downloads' | 'settings'
@@ -51,8 +52,9 @@ export default function App() {
           </Tabs.ListContainer>
         </Tabs>
 
-        {/* Keeps the tabs centered. */}
-        <div />
+        <div className="flex justify-end">
+          <UpdateButton />
+        </div>
       </header>
 
       <main ref={mainRef} className="scroll-area relative flex-1 overflow-y-auto">

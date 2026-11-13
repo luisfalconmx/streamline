@@ -29,9 +29,9 @@
     "active": true,
     "targets": "all",
     "category": "Video",
-    "shortDescription": "Descarga videos sin l\u00edmites de velocidad",
-    "longDescription": "Streamline es una app de escritorio para descargar videos y audio de YouTube y m\u00e1s de 1800 sitios, impulsada por yt-dlp.",
-    "copyright": "\u00a9 2026 luisfalconmx",
+    "shortDescription": "Descarga videos sin límites de velocidad",
+    "longDescription": "Streamline es una app de escritorio para descargar videos y audio de YouTube y más de 1800 sitios, impulsada por yt-dlp.",
+    "copyright": "© 2026 luisfalconmx",
     "externalBin": [
       "binaries/yt-dlp",
       "binaries/ffmpeg",
@@ -53,6 +53,17 @@
     "linux": {
       "deb": {
         "depends": []
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY3MzZFMjgxNzcwRTFEODkKUldTSkhRNTNnZUkyWjVLMW51OFI0ODRGN0UzVHhyVXA3UGg1L3NtL2xnMHhBWEFDZUtpdDBuUUoK",
+      "endpoints": [
+        "https://github.com/luisfalconmx/streamline/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
       }
     }
   }

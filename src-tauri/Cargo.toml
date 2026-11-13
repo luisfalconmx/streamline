@@ -27,6 +27,8 @@ reqwest = { version = "0.13", default-features = false, features = ["native-tls"
 tokio = { version = "1", features = ["process", "io-util", "sync", "macros", "rt-multi-thread", "time"] }
 scraper = "0.29.0"
 regex = "1.13.1"
+tauri-plugin-updater = "2.14"
+tauri-plugin-process = "2.4"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

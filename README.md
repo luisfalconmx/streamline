@@ -30,14 +30,16 @@
 
 ## 📦 Instalación
 
-Descarga el instalador de tu sistema desde la página de **[Releases](https://github.com/luisfalconmx/streamline/releases)**:
+Descarga el instalador de tu sistema. Estos enlaces siempre apuntan a la última versión:
 
 | Sistema | Archivo |
 | --- | --- |
-| macOS (Apple Silicon) | `Streamline_x.y.z_aarch64.dmg` |
-| macOS (Intel) | `Streamline_x.y.z_x64.dmg` |
-| Windows | `Streamline_x.y.z_x64-setup.exe` o `.msi` |
-| Linux | `.AppImage`, `.deb` o `.rpm` |
+| macOS (Apple Silicon) | [`Streamline_aarch64.dmg`](https://github.com/luisfalconmx/streamline/releases/latest/download/Streamline_aarch64.dmg) |
+| macOS (Intel) | [`Streamline_x64.dmg`](https://github.com/luisfalconmx/streamline/releases/latest/download/Streamline_x64.dmg) |
+| Windows | [`Streamline_x64-setup.exe`](https://github.com/luisfalconmx/streamline/releases/latest/download/Streamline_x64-setup.exe) o [`.msi`](https://github.com/luisfalconmx/streamline/releases/latest/download/Streamline_x64.msi) |
+| Linux | [`Streamline_amd64.AppImage`](https://github.com/luisfalconmx/streamline/releases/latest/download/Streamline_amd64.AppImage), [`.deb`](https://github.com/luisfalconmx/streamline/releases/latest/download/Streamline_amd64.deb) o [`.rpm`](https://github.com/luisfalconmx/streamline/releases/latest/download/Streamline.x86_64.rpm) |
+
+**Actualizaciones automáticas:** al abrirse, Streamline consulta el último Release de GitHub. Si hay una versión nueva aparece el botón **Actualizar a vX.Y.Z** arriba a la derecha: descarga la actualización, verifica su firma, la instala sobre la actual y reinicia la app. No hace falta desinstalar nada. En Linux esto funciona con la AppImage; con `.deb`/`.rpm` se instala el paquete nuevo.
 
 > **macOS**: la app no está firmada con un certificado de desarrollador de Apple. Si al abrirla aparece «está dañada», ejecuta una vez:
 > ```bash
@@ -69,7 +71,7 @@ streamline/
 │   ├── src/scrape.rs        # Lee la página: título, portada y calidades del reproductor
 │   ├── binaries/            # Sidecars (se descargan con `pnpm sidecars`, no se versionan)
 │   └── tauri.conf.json
-├── scripts/fetch-sidecars.mjs
+├── scripts/                 # Sidecars y publicación (release-*.mjs: instaladores sin versión + latest.json)
 ├── docker/ + compose.yaml   # Entorno de desarrollo con Docker Desktop
 └── .github/workflows/       # CI y release multiplataforma
 ```
@@ -118,14 +120,24 @@ pnpm tauri dev
 
 ## 🚀 Publicar una versión
 
-1. Actualiza `version` en `package.json`, `src-tauri/tauri.conf.json` y `src-tauri/Cargo.toml`.
-2. Crea y sube un tag. El workflow [`release.yml`](.github/workflows/release.yml) compila **Windows y Linux** en GitHub y crea el Release:
+Las actualizaciones van firmadas: la app solo instala paquetes firmados con la llave privada del proyecto, `~/.tauri/streamline.key` (la pública está en `tauri.conf.json`). **Guárdala en un lugar seguro**: si se pierde, las apps instaladas ya no podrán actualizarse.
+
+Una sola vez, sube la llave como secreto del repositorio para que GitHub Actions pueda firmar:
 
 ```bash
-git tag v0.1.1 && git push origin v0.1.1
+gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/streamline.key
 ```
 
-3. Compila los `.dmg` de **macOS** (Apple Silicon e Intel) en tu Mac y súbelos al mismo Release junto con el `.zip` de la extensión (requiere Rust y `gh`):
+Para cada versión:
+
+1. Actualiza `version` en `package.json`, `src-tauri/tauri.conf.json` y `src-tauri/Cargo.toml`.
+2. Crea y sube un tag. El workflow [`release.yml`](.github/workflows/release.yml) compila **Windows y Linux**, firma las actualizaciones y publica el Release con los instaladores (nombres sin versión) y el `latest.json` que lee la app:
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+3. Cuando termine, compila **macOS** (Apple Silicon e Intel) en tu Mac. Sube los `.dmg` y las actualizaciones firmadas al mismo Release y las agrega a `latest.json` (requiere Rust y `gh`):
 
 ```bash
 pnpm release:mac
