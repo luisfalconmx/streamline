@@ -39,6 +39,7 @@ export interface YtInfo {
   webpage_url: string
   original_url?: string
   extractor_key?: string
+  webpage_url_domain?: string
   extractor?: string
   uploader?: string | null
   channel?: string | null
@@ -83,7 +84,7 @@ export interface QualityOption {
   audioQuality?: string
   /** Container of the source file (direct links) */
   ext?: string
-  /** Separate URL for this quality (qualities sent by the browser extension) */
+  /** Separate URL for this quality (qualities found on the web page) */
   url?: string
 }
 
@@ -145,7 +146,7 @@ export interface DownloadRequest {
   ext?: string
   /** Literal file name instead of yt-dlp's %(title)s */
   title?: string
-  /** Page the video was found on (browser extension) */
+  /** Web page the video was found on (sent as Referer) */
   referer?: string
   /** YouTube 360p fallback clients (no browser session) */
   limitedClients?: boolean
@@ -189,12 +190,7 @@ export interface Settings {
   concurrentFragments: number
   maxParallel: number
   cookiesBrowser: string
-  autoAnalyzeClipboard: boolean
   filenameTemplate: string
-  /** The first-run extension wizard was shown and closed */
-  extensionWizardDone: boolean
-  /** Browsers whose extension confirmed itself via streamline://extension-installed */
-  extensionConfirmed: string[]
 }
 
 export interface MediaPreview {
@@ -205,23 +201,4 @@ export interface MediaPreview {
   fps?: number | null
   vcodec?: string | null
   acodec?: string | null
-}
-
-export interface BrowserStatus {
-  id: 'chrome' | 'brave'
-  name: string
-  available: boolean
-  extensionInstalled: boolean
-}
-
-export interface ExtensionStatus {
-  os: 'macos' | 'windows' | 'linux' | string
-  /** Real folder: <app data>/extension */
-  dir: string
-  /** macOS: visible shortcut ~/Streamline Extension */
-  shortcut?: string | null
-  bundledVersion?: string | null
-  copiedVersion?: string | null
-  browsers: BrowserStatus[]
-  anyInstalled: boolean
 }

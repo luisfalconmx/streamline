@@ -1,5 +1,5 @@
 import { Button, Card, Chip, ProgressBar, Tooltip } from '@heroui/react'
-import { Ban, FolderOpen, Inbox, Pencil, Play, RotateCcw, Trash2, X } from 'lucide-react'
+import { Ban, FolderOpen, Inbox, Play, RotateCcw, Trash2, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { formatBytes, formatEta, formatSpeed } from '../lib/format'
 import { openFile, revealFile } from '../lib/tauri'
@@ -14,10 +14,10 @@ const STATUS: Record<DownloadStatus, { label: string; color: 'default' | 'accent
   processing: { label: 'Procesando', color: 'warning' },
   done: { label: 'Completado', color: 'success' },
   error: { label: 'Error', color: 'danger' },
-  cancelled: { label: 'Cancelado', color: 'default' },
+  cancelled: { label: 'Cancelado', color: 'danger' },
 }
 
-export function DownloadsView({ onNew, onEdit }: { onNew: () => void; onEdit: (path: string) => void }) {
+export function DownloadsView({ onNew }: { onNew: () => void }) {
   const { downloads, clearFinished, settings } = useStore()
   // Running items first, then the queue in the order it will be processed.
   const running = downloads.filter((d) => ['starting', 'downloading', 'processing'].includes(d.status))
@@ -63,14 +63,14 @@ export function DownloadsView({ onNew, onEdit }: { onNew: () => void; onEdit: (p
       {active.length > 0 && (
         <Section title="En progreso">
           {active.map((d) => (
-            <DownloadRow key={d.id} item={d} onEdit={onEdit} />
+            <DownloadRow key={d.id} item={d} />
           ))}
         </Section>
       )}
       {finished.length > 0 && (
         <Section title="Historial">
           {finished.map((d) => (
-            <DownloadRow key={d.id} item={d} onEdit={onEdit} />
+            <DownloadRow key={d.id} item={d} />
           ))}
         </Section>
       )}
@@ -104,18 +104,24 @@ function IconAction({ label, onPress, children, danger }: { label: string; onPre
   )
 }
 
-function DownloadRow({ item, onEdit }: { item: DownloadItem; onEdit: (path: string) => void }) {
+function DownloadRow({ item }: { item: DownloadItem }) {
   const { cancel, retry, remove } = useStore()
   const status = STATUS[item.status]
   const running = ['starting', 'downloading', 'processing'].includes(item.status)
   const indeterminate = item.status === 'starting' || item.status === 'processing'
   const pct = Math.round(item.progress * 100)
+  const cancelled = item.status === 'cancelled'
 
   return (
-    <Card className="flex-row items-center gap-4 p-3">
+    <Card className={['flex-row items-center gap-4 p-3', cancelled ? 'opacity-60' : ''].join(' ')}>
       <div className="relative aspect-video w-36 shrink-0 overflow-hidden rounded-lg bg-default">
         {item.thumbnail && (
-          <img src={item.thumbnail} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
+          <img
+            src={item.thumbnail}
+            alt=""
+            className={['size-full object-cover', cancelled ? 'grayscale' : ''].join(' ')}
+            referrerPolicy="no-referrer"
+          />
         )}
         {item.status === 'done' && item.filePath && (
           <button
@@ -189,11 +195,6 @@ function DownloadRow({ item, onEdit }: { item: DownloadItem; onEdit: (path: stri
             <IconAction label="Abrir archivo" onPress={() => openFile(item.filePath!)}>
               <Play className="size-4" />
             </IconAction>
-            {item.mode === 'video' && (
-              <IconAction label="Editar (recortes, título y portada)" onPress={() => onEdit(item.filePath!)}>
-                <Pencil className="size-4" />
-              </IconAction>
-            )}
             <IconAction label="Mostrar en carpeta" onPress={() => revealFile(item.filePath!)}>
               <FolderOpen className="size-4" />
             </IconAction>

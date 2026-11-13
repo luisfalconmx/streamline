@@ -292,7 +292,7 @@ async fn probe_url(client: &reqwest::Client, url: &str, headers: &serde_json::Ma
 }
 
 /// Sizes of several direct files (HEAD or 1-byte ranged GET), in parallel.
-/// Used for the quality list the browser extension sends.
+/// Used for the qualities found on a web page.
 #[tauri::command]
 pub async fn probe_sizes(urls: Vec<String>, referer: Option<String>) -> Vec<Option<u64>> {
     let Ok(client) = reqwest::Client::builder()
@@ -404,7 +404,7 @@ pub struct MediaPreview {
 
 /// The bundled ffmpeg uses OpenSSL and does not know where the OS keeps its
 /// trusted certificates, so point it at the system bundle when there is one.
-pub(crate) fn ca_bundle() -> Option<&'static str> {
+fn ca_bundle() -> Option<&'static str> {
     [
         "/etc/ssl/cert.pem",
         "/etc/ssl/certs/ca-certificates.crt",
@@ -543,7 +543,7 @@ pub struct DownloadRequest {
     pub ext: Option<String>,
     /// Readable file name to use instead of `%(title)s` (direct links).
     pub title: Option<String>,
-    /// Page the video was found on (sent by the browser extension).
+    /// Web page the video was found on (sent as Referer).
     pub referer: Option<String>,
     /// Use the 360p fallback clients (see `LIMITED_CLIENTS`).
     #[serde(default)]
@@ -702,7 +702,7 @@ fn parse_progress(id: &str, line: &str) -> Option<DlEvent> {
     })
 }
 
-fn build_args(req: &DownloadRequest, info_json: Option<&std::path::Path>) -> Vec<String> {
+fn build_args(req: &DownloadRequest, info_json: Option<&std::path::Path>, temp_dir: &std::path::Path) -> Vec<String> {
     let template = output_template(req);
     let mut a: Vec<String> = Vec::new();
     let mut push = |s: &str| a.push(s.to_string());
@@ -742,8 +742,12 @@ fn build_args(req: &DownloadRequest, info_json: Option<&std::path::Path>) -> Vec
     push("--no-mtime");
     push("--continue");
 
+    // Fragments, `.part`, `.ytdl` and intermediate files live in the app's
+    // temporary folder; only the finished file is moved to the chosen folder.
     push("-P");
-    push(&req.output_dir);
+    push(&format!("home:{}", req.output_dir));
+    push("-P");
+    push(&format!("temp:{}", temp_dir.to_string_lossy()));
     push("-o");
     push(&template);
 
@@ -806,16 +810,17 @@ pub async fn start_download(
     std::fs::create_dir_all(&request.output_dir)
         .map_err(|e| format!("No se pudo crear la carpeta de destino: {e}"))?;
 
+    let cache = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+    let temp_dir = job_temp_dir(&cache, &request.id);
+    std::fs::create_dir_all(&temp_dir).map_err(|e| format!("No se pudo crear la carpeta temporal: {e}"))?;
+
     let info_json = match forced_ext(&request) {
-        Some(ext) => {
-            let cache = app.path().app_cache_dir().map_err(|e| e.to_string())?;
-            Some(prepare_direct_info(cache, &request, &ext).await?)
-        }
+        Some(ext) => Some(prepare_direct_info(cache, &request, &ext).await?),
         None => None,
     };
 
     let mut cmd = ytdlp(request.cookies_browser.as_deref(), request.referer.as_deref());
-    cmd.args(build_args(&request, info_json.as_deref()));
+    cmd.args(build_args(&request, info_json.as_deref(), &temp_dir));
     #[cfg(unix)]
     {
         // Own process group so cancelling also stops ffmpeg children.
@@ -879,6 +884,9 @@ pub async fn start_download(
             let _ = std::fs::remove_file(path);
         }
         let was_cancelled = jobs.cancelled.lock().await.remove(&id);
+        // Finished, failed or cancelled: the temporary files are not needed
+        // (the finished file was already moved to the chosen folder).
+        remove_dir_retrying(&temp_dir).await;
 
         let event = if was_cancelled {
             DlEvent::Cancelled { id }
@@ -899,6 +907,33 @@ pub async fn start_download(
     });
 
     Ok(())
+}
+
+/// Per-download temporary folder inside the app cache:
+/// macOS `~/Library/Caches/<app>/downloads/<id>`, Windows
+/// `%LOCALAPPDATA%\<app>\downloads\<id>`, Linux `~/.cache/<app>/downloads/<id>`.
+fn job_temp_dir(cache: &std::path::Path, id: &str) -> PathBuf {
+    cache.join("downloads").join(id.replace(|c: char| !c.is_ascii_alphanumeric() && c != '-', "_"))
+}
+
+/// Deletes a folder, retrying briefly: ffmpeg (or Windows file locks) may
+/// still hold files for a moment after the process tree is stopped.
+async fn remove_dir_retrying(dir: &std::path::Path) {
+    for _ in 0..10 {
+        match std::fs::remove_dir_all(dir) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                tokio::time::sleep(Duration::from_millis(300)).await;
+            }
+            _ => return,
+        }
+    }
+}
+
+/// Temporary files left by a previous session (app closed mid-download).
+pub fn clear_stale_temp(app: &AppHandle) {
+    if let Ok(cache) = app.path().app_cache_dir() {
+        let _ = std::fs::remove_dir_all(cache.join("downloads"));
+    }
 }
 
 #[tauri::command]
@@ -935,7 +970,7 @@ pub fn default_download_dir(app: AppHandle) -> Result<String, String> {
         .download_dir()
         .or_else(|_| app.path().home_dir())
         .map_err(|e| e.to_string())?;
-    Ok(base.join("Streamline").to_string_lossy().to_string())
+    Ok(base.to_string_lossy().to_string())
 }
 
 #[derive(Serialize)]
@@ -1037,6 +1072,16 @@ mod tests {
         let b = output_template(&req("https://s.com/get_file/3114894_1080p.mp4/?tok=2", Some("mp4"), Some("3114894_1080p")));
         assert_eq!(a, b);
         assert!(a.starts_with("3114894_1080p [") && a.ends_with("].%(ext)s"), "{a}");
+    }
+
+    #[test]
+    fn temp_files_go_to_the_app_folder() {
+        let r = req("https://site.com/v", None, None);
+        let temp = job_temp_dir(std::path::Path::new("/cache"), "abc-1/x");
+        assert_eq!(temp, std::path::Path::new("/cache/downloads/abc-1_x"));
+        let args = build_args(&r, None, &temp);
+        let p: Vec<_> = args.windows(2).filter(|w| w[0] == "-P").map(|w| w[1].as_str()).collect();
+        assert_eq!(p, vec![format!("home:{}", r.output_dir), "temp:/cache/downloads/abc-1_x".to_string()]);
     }
 
     #[test]

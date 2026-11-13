@@ -17,15 +17,12 @@
         "height": 780,
         "minWidth": 860,
         "minHeight": 620,
-        "center": true
+        "center": true,
+        "theme": "Dark"
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' https: http: data: blob: asset: http://asset.localhost; media-src 'self' blob: asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost",
-      "assetProtocol": {
-        "enable": true,
-        "scope": []
-      }
+      "csp": "default-src 'self'; img-src 'self' https: http: data: blob:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost"
     }
   },
   "bundle": {
@@ -56,18 +53,6 @@
     "linux": {
       "deb": {
         "depends": []
-      }
-    },
-    "resources": {
-      "../extension/": "extension/"
-    }
-  },
-  "plugins": {
-    "deep-link": {
-      "desktop": {
-        "schemes": [
-          "streamline"
-        ]
       }
     }
   }

@@ -29,10 +29,7 @@ export const DEFAULT_SETTINGS: Settings = {
   concurrentFragments: 8,
   maxParallel: 3,
   cookiesBrowser: '',
-  autoAnalyzeClipboard: true,
   filenameTemplate: '%(title).180B.%(ext)s',
-  extensionWizardDone: false,
-  extensionConfirmed: [],
 }
 
 function load<T>(key: string, fallback: T): T {
@@ -171,11 +168,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [downloads, dispatch] = useReducer(reducer, undefined, loadHistory)
   const starting = useRef(new Set<string>())
 
-  // Resolve default download folder on first run.
+  // Default download folder (Downloads) on first run. Earlier versions used
+  // Downloads/Streamline by default: move that one to Downloads once.
   useEffect(() => {
-    if (!settings.outputDir) {
-      defaultDownloadDir().then((dir) => setSettings((s) => ({ ...s, outputDir: s.outputDir || dir })))
+    const MIGRATED = 'streamline.downloadsDir.v2'
+    let migrated = true
+    try {
+      migrated = !!localStorage.getItem(MIGRATED)
+      localStorage.setItem(MIGRATED, '1')
+    } catch {
+      /* storage unavailable */
     }
+    if (settings.outputDir && migrated) return
+    defaultDownloadDir().then((def) =>
+      setSettings((s) => {
+        const old = !s.outputDir || s.outputDir === `${def}/Streamline` || s.outputDir === `${def}\\Streamline`
+        return old && s.outputDir !== def ? { ...s, outputDir: def } : s
+      }),
+    )
   }, [settings.outputDir])
 
   useEffect(() => {
@@ -235,12 +245,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const updateSettings = useCallback((patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch })), [])
   const resetSettings = useCallback(
     () =>
-      setSettings((s) => ({
-        ...DEFAULT_SETTINGS,
-        outputDir: s.outputDir,
-        extensionWizardDone: s.extensionWizardDone,
-        extensionConfirmed: s.extensionConfirmed,
-      })),
+      setSettings((s) => ({ ...DEFAULT_SETTINGS, outputDir: s.outputDir })),
     [],
   )
   const enqueue = useCallback((items: DownloadItem[]) => dispatch({ type: 'add', items }), [])

@@ -120,7 +120,7 @@ export function PlaylistPanel({ info, onQueued }: { info: YtInfo; onQueued: () =
         </ul>
       </Card>
 
-      <div className="sticky bottom-0 -mx-8 flex items-center gap-4 border-t border-separator bg-background/85 px-8 py-4 backdrop-blur-md">
+      <div className="surface sticky bottom-4 flex items-center gap-4 rounded-3xl px-6 py-4 shadow-overlay backdrop-blur-md">
         <div className="min-w-0 flex-1">
           <FolderPicker compact />
         </div>

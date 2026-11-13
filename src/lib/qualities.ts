@@ -106,10 +106,18 @@ export function buildVideoOptions(info: YtInfo, settings: Settings): QualityOpti
 
   const audio = pickAudio(audiosOnly, settings.mergeFormat)
   const groups = new Map<string, YtFormat[]>()
-  for (const v of videos) {
+  const keyOf = (v: YtFormat) => {
     const fps = v.fps && v.fps > 30 ? Math.round(v.fps) : 0
     const hdr = v.dynamic_range && v.dynamic_range !== 'SDR' ? 'hdr' : ''
-    const key = `${v.height}-${fps}-${hdr}`
+    return `${v.height}-${fps}-${hdr}`
+  }
+  // Formats with a known frame rate first; the same resolution offered again
+  // without fps/codec info (e.g. a direct MP4 next to its HLS stream) joins
+  // that group instead of showing up as a duplicate quality.
+  for (const v of videos.filter((f) => f.fps)) groups.set(keyOf(v), [...(groups.get(keyOf(v)) ?? []), v])
+  for (const v of videos.filter((f) => !f.fps)) {
+    const same = [...groups.keys()].filter((k) => k.startsWith(`${v.height}-`) && !k.endsWith('hdr'))
+    const key = same.length === 1 ? same[0] : keyOf(v)
     groups.set(key, [...(groups.get(key) ?? []), v])
   }
 
@@ -266,6 +274,21 @@ export function nameFromDirectUrl(url: string): string | undefined {
   }
 }
 
+/** True for links straight to a media file (no web page to read). */
+export function isMediaFileUrl(url: string): boolean {
+  try {
+    const path = new URL(url).pathname.replace(/\/+$/, '')
+    return MEDIA_FILE.test(path) || /\.(m3u8|mpd)$/i.test(path)
+  } catch {
+    return false
+  }
+}
+
+/** How many different resolutions yt-dlp found. */
+export function heightCount(info: YtInfo): number {
+  return new Set((info.formats ?? []).filter((f) => f.height && f.vcodec !== 'none').map((f) => f.height)).size
+}
+
 /** Merges an ffmpeg preview into the info of a direct link (single format). */
 export function applyPreview(info: YtInfo, p: MediaPreview): YtInfo {
   const formats = (info.formats ?? []).map((f, i) =>
@@ -289,13 +312,13 @@ export function applyPreview(info: YtInfo, p: MediaPreview): YtInfo {
 }
 
 /**
- * One option per quality the browser extension found for the same video (each
+ * One option per quality found on the web page for the same video (each
  * one is its own direct file). The analysed source (`analyzedUrl`) contributes
  * its codec/fps/size from yt-dlp + ffmpeg.
  */
 export function buildSourceOptions(
   info: YtInfo,
-  sources: { url: string; quality?: number; size?: number }[],
+  sources: { url: string; quality?: number | null; size?: number }[],
   analyzedUrl: string,
 ): QualityOption[] {
   const f = info.formats?.at(-1)

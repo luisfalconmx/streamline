@@ -42,7 +42,7 @@ export function UrlBar({ value, onChange, onSubmit, loading, compact }: Props) {
             <Link2 className="size-5 text-muted" />
           </InputGroup.Prefix>
           <InputGroup.Input
-            className="w-full"
+            className="w-full px-3"
             placeholder="Pega aquí el enlace de YouTube, TikTok, Instagram, X, Vimeo…"
             spellCheck={false}
             autoComplete="off"

@@ -1,67 +1,33 @@
-import { Button, Tabs, Toast, toast, Tooltip, useTheme } from '@heroui/react'
-import { Download, ListOrdered, Moon, Scissors, Settings2, Sun } from 'lucide-react'
+import { Tabs, Toast } from '@heroui/react'
+import { Download, ListOrdered, Settings2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { DownloadsView } from './components/DownloadsView'
-import { EditorView } from './components/editor/EditorView'
-import { ExtensionBanner } from './components/ExtensionBanner'
-import { ExtensionWizard } from './components/ExtensionWizard'
 import { DownloadView } from './components/DownloadView'
 import { Logo } from './components/Logo'
 import { SettingsView } from './components/SettingsView'
-import { useExtension } from './extension-state'
-import { focusWindow, onDeepLink, type IncomingLink } from './lib/tauri'
 import { useStore } from './store'
 
-type View = 'download' | 'downloads' | 'editor' | 'settings'
-
-const BROWSER_NAMES: Record<string, string> = { brave: 'Brave', chrome: 'Google Chrome', edge: 'Microsoft Edge', opera: 'Opera' }
+type View = 'download' | 'downloads' | 'settings'
 
 export default function App() {
   const [view, setView] = useState<View>('download')
   const { activeCount } = useStore()
-  const { resolvedTheme, setTheme } = useTheme('system')
   const mainRef = useRef<HTMLElement>(null)
-  const { markConfirmed } = useExtension()
-  const [editRequest, setEditRequest] = useState<{ path: string; nonce: number } | null>(null)
-  const openEditor = (path: string) => {
-    setEditRequest((r) => ({ path, nonce: (r?.nonce ?? 0) + 1 }))
-    setView('editor')
-  }
-  const [incoming, setIncoming] = useState<(IncomingLink & { nonce: number }) | null>(null)
 
-  // `streamline://download?url=…` from the browser extension.
-  useEffect(() => {
-    let nonce = 0
-    const off = onDeepLink((link) => {
-      if (link.browser) markConfirmed(link.browser)
-      if (link.kind === 'extension-installed') {
-        toast.success('Extensión conectada', {
-          description: `Streamline ya recibe videos desde ${BROWSER_NAMES[link.browser] ?? link.browser}.`,
-        })
-        focusWindow()
-        return
-      }
-      setView('download')
-      setIncoming({ url: link.url, referer: link.referer, title: link.title, nonce: ++nonce })
-      focusWindow()
-    })
-    return () => {
-      off.then((f) => f())
-    }
-  }, [markConfirmed])
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 })
   }, [view])
 
   return (
-    <div className="flex h-full flex-col bg-background text-foreground">
-      <header className="flex shrink-0 items-center gap-6 border-b border-separator px-6 py-3">
+    <div className="app-bg flex h-full flex-col text-foreground">
+      <header className="grid shrink-0 grid-cols-[200px_1fr_200px] items-center gap-4 border-b border-separator px-6 py-3">
         <div className="flex items-center gap-2.5">
           <Logo className="size-8" />
           <span className="text-lg font-bold tracking-tight">Streamline</span>
+          <span className="text-xs font-medium text-muted tabular-nums">v{__APP_VERSION__}</span>
         </div>
 
-        <Tabs selectedKey={view} onSelectionChange={(k) => setView(k as View)} className="mx-auto">
+        <Tabs selectedKey={view} onSelectionChange={(k) => setView(k as View)} className="justify-self-center">
           <Tabs.ListContainer>
             <Tabs.List aria-label="Navegación">
               <Tabs.Tab id="download">
@@ -77,10 +43,6 @@ export default function App() {
                 )}
                 <Tabs.Indicator />
               </Tabs.Tab>
-              <Tabs.Tab id="editor">
-                <Scissors className="mr-1.5 size-4" /> Editor
-                <Tabs.Indicator />
-              </Tabs.Tab>
               <Tabs.Tab id="settings">
                 <Settings2 className="mr-1.5 size-4" /> Ajustes
                 <Tabs.Indicator />
@@ -89,37 +51,19 @@ export default function App() {
           </Tabs.ListContainer>
         </Tabs>
 
-        <Tooltip delay={300}>
-          <Button
-            isIconOnly
-            variant="ghost"
-            aria-label="Cambiar tema"
-            onPress={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-          >
-            {resolvedTheme === 'dark' ? <Sun className="size-5" /> : <Moon className="size-5" />}
-          </Button>
-          <Tooltip.Content>
-            <p>{resolvedTheme === 'dark' ? 'Modo claro' : 'Modo oscuro'}</p>
-          </Tooltip.Content>
-        </Tooltip>
+        {/* Keeps the tabs centered. */}
+        <div />
       </header>
-
-      <ExtensionBanner />
 
       <main ref={mainRef} className="scroll-area relative flex-1 overflow-y-auto">
         {/* Keep the download view mounted so the analysed video survives tab switches. */}
         <div className={view === 'download' ? 'contents' : 'hidden'}>
-          <DownloadView onShowDownloads={() => setView('downloads')} incoming={incoming} />
+          <DownloadView onShowDownloads={() => setView('downloads')} />
         </div>
-        {view === 'downloads' && <DownloadsView onNew={() => setView('download')} onEdit={openEditor} />}
-        {/* Kept mounted so an open edit survives switching tabs. */}
-        <div className={view === 'editor' ? 'contents' : 'hidden'}>
-          <EditorView request={editRequest} />
-        </div>
+        {view === 'downloads' && <DownloadsView onNew={() => setView('download')} />}
         {view === 'settings' && <SettingsView />}
       </main>
 
-      <ExtensionWizard />
       <Toast.Provider placement="bottom end" />
     </div>
   )

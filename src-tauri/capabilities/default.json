@@ -9,19 +9,6 @@
     "core:default",
     "dialog:allow-open",
     "clipboard-manager:allow-read-text",
-    "opener:allow-open-url",
-    "deep-link:default",
-    "core:window:allow-set-focus",
-    "core:window:allow-unminimize",
-    "core:window:allow-show",
-    "clipboard-manager:allow-write-text",
-    "core:window:allow-set-always-on-top",
-    "core:window:allow-set-size",
-    "core:window:allow-set-min-size",
-    "core:window:allow-set-position",
-    "core:window:allow-outer-size",
-    "core:window:allow-outer-position",
-    "core:window:allow-scale-factor",
-    "core:window:allow-current-monitor"
+    "opener:allow-open-url"
   ]
 }

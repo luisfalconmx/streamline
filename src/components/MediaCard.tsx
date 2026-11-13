@@ -15,7 +15,7 @@ function Meta({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   )
 }
 
-export function MediaCard({ info, loadingPreview }: { info: YtInfo; loadingPreview?: boolean }) {
+export function MediaCard({ info, loadingPreview, site }: { info: YtInfo; loadingPreview?: boolean; site?: string }) {
   const thumb = bestThumbnail(info)
   const author = info.uploader ?? info.channel
 
@@ -46,9 +46,9 @@ export function MediaCard({ info, loadingPreview }: { info: YtInfo; loadingPrevi
 
       <div className="flex min-w-0 flex-1 flex-col gap-3 py-1">
         <div className="flex items-center gap-2">
-          {info.extractor_key && (
+          {(site || info.webpage_url_domain) && (
             <Chip size="sm" variant="soft" color="accent">
-              {info.extractor_key.replace(/Tab$/, '')}
+              {site || info.webpage_url_domain}
             </Chip>
           )}
         </div>

@@ -1,13 +1,15 @@
-import { Alert, Button, Card, Skeleton, Switch, Tabs, toast } from '@heroui/react'
+import { Alert, Button, Card, Input, Label, Skeleton, Switch, Tabs, TextField, toast } from '@heroui/react'
 import { Download, Film, Music, Sparkles, Zap } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { formatBytes, looksLikeUrl, uid } from '../lib/format'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { formatBytes, uid } from '../lib/format'
 import {
   applyPreview,
   bestThumbnail,
   buildAudioOptions,
   buildSourceOptions,
   buildVideoOptions,
+  heightCount,
+  isMediaFileUrl,
   nameFromDirectUrl,
 } from '../lib/qualities'
 import { buildRequest } from '../lib/request'
@@ -16,11 +18,10 @@ import {
   isBotCheck,
   probeMedia,
   probeSizes,
-  readClipboard,
-  type IncomingLink,
-  type SourceLink,
+  scrapePage,
+  type PageInfo,
+  type PageSource,
 } from '../lib/tauri'
-import { useExtension } from '../extension-state'
 import type { DownloadItem, MediaMode, Settings, YtInfo } from '../lib/types'
 import { useStore } from '../store'
 import { FolderPicker } from './FolderPicker'
@@ -46,24 +47,112 @@ const AUDIO_FORMATS: { value: Settings['audioFormat']; label: string }[] = [
   { value: 'wav', label: 'WAV' },
 ]
 
+/** Browsers offered when YouTube asks to confirm you're not a bot. */
+const SESSION_BROWSERS = [
+  { id: 'chrome', name: 'Chrome' },
+  { id: 'brave', name: 'Brave' },
+  { id: 'firefox', name: 'Firefox' },
+  { id: 'edge', name: 'Edge' },
+  ...(/Mac/i.test(navigator.userAgent) ? [{ id: 'safari', name: 'Safari' }] : []),
+]
+
 interface Props {
   onShowDownloads: () => void
-  /** Link received from the browser extension (`streamline://`). */
-  incoming?: (IncomingLink & { nonce: number }) | null
 }
 
-export function DownloadView({ onShowDownloads, incoming }: Props) {
+interface Analysis {
+  info: YtInfo
+  /** URL yt-dlp analysed (the page, or a video file / manifest found on it) */
+  analyzed: string
+  /** Page the video files came from, sent as Referer */
+  referer?: string
+  /** Each quality is its own file (found on the page) */
+  sources?: PageSource[]
+}
+
+/**
+ * yt-dlp knows the formats of the sites it supports (YouTube, TikTok…). For any
+ * other page, the page itself is read: its title names the video and the
+ * player's quality menu (every `<source>`, the player config or an HLS
+ * manifest) gives all the resolutions, even when only one is loaded.
+ */
+async function resolveAnalysis(
+  target: string,
+  ytdlp: PromiseSettledResult<YtInfo>,
+  page: PageInfo | null,
+  cookies: string | undefined,
+): Promise<Analysis> {
+  const info = ytdlp.status === 'fulfilled' ? ytdlp.value : null
+  const found = info ? heightCount(info) : 0
+  // yt-dlp already lists every resolution (YouTube, Vimeo, HLS…): trust it.
+  if (info && found >= 2) return withPageDetails({ info, analyzed: target }, page, target)
+
+  let result: Analysis | null = info ? { info, analyzed: target } : null
+  const sources = page?.sources ?? []
+  const files = sources.filter((s) => !s.manifest && s.quality)
+  const manifests = sources.filter((s) => s.manifest)
+
+  if (page && files.length >= 2 && files.length > found) {
+    // One file per quality: analyse the best one, list them all.
+    const best = files[0]
+    try {
+      result = { info: await fetchInfo(best.url, cookies, page.url), analyzed: best.url, referer: page.url, sources: files }
+    } catch (e) {
+      if (!result) throw e
+    }
+  } else if (page && manifests.length) {
+    // HLS/DASH manifest: yt-dlp lists every variant inside it.
+    try {
+      const m = await fetchInfo(manifests[0].url, cookies, page.url)
+      if (!result || heightCount(m) > found) result = { info: m, analyzed: manifests[0].url, referer: page.url }
+    } catch (e) {
+      if (!result) throw e
+    }
+  } else if (page && !result && sources.length) {
+    const first = sources[0]
+    result = { info: await fetchInfo(first.url, cookies, page.url), analyzed: first.url, referer: page.url }
+  }
+
+  if (!result) throw ytdlp.status === 'rejected' ? ytdlp.reason : new Error('No se encontró ningún video en la página.')
+  return withPageDetails(result, page, target)
+}
+
+/** yt-dlp extractors that only read the page generically (no site-specific title). */
+const GENERIC_EXTRACTORS = new Set(['Generic', 'HTML5MediaEmbed'])
+
+/** The page title names the video; yt-dlp's title for generic pages is a file or script name. */
+function withPageDetails(result: Analysis, page: PageInfo | null, target: string): Analysis {
+  const { info } = result
+  const generic = !!info.direct || !!result.referer || GENERIC_EXTRACTORS.has(info.extractor_key ?? '')
+  const title = generic ? page?.title || (info.direct ? nameFromDirectUrl(target) : undefined) : undefined
+  result.info = {
+    ...info,
+    title: title || info.title,
+    // The cover Streamline already downloaded itself (a `data:` URL) always
+    // shows; remote thumbnail URLs are often refused to the app's webview
+    // (hotlink protection, signed CDN links). Then yt-dlp's thumbnail, except
+    // on generic pages where it is only a guess.
+    thumbnail:
+      (page?.image?.startsWith('data:')
+        ? page.image
+        : generic
+          ? page?.image || info.thumbnail
+          : info.thumbnail || page?.image) || undefined,
+    webpage_url: info.webpage_url || result.analyzed,
+  }
+  return result
+}
+
+export function DownloadView({ onShowDownloads }: Props) {
   const { settings, updateSettings, enqueue } = useStore()
   const [url, setUrl] = useState('')
-  const [referer, setReferer] = useState<string>()
-  /** Web page title sent by the browser extension. */
-  const [pageTitle, setPageTitle] = useState<string>()
-  /** Every quality of the video sent by the extension (each is its own file). */
-  const [sources, setSources] = useState<SourceLink[]>()
-  const [analyzedUrl, setAnalyzedUrl] = useState('')
+  /** Link that was analysed (its hostname labels the preview). */
+  const [pastedUrl, setPastedUrl] = useState('')
+  const [analysis, setAnalysis] = useState<Omit<Analysis, 'info'> | null>(null)
+  /** File name the user can edit before downloading (without extension). */
+  const [fileName, setFileName] = useState('')
   /** Analysed with YouTube's 360p fallback clients (no browser session). */
   const [limited, setLimited] = useState(false)
-  const { status: extStatus } = useExtension()
   const [probing, setProbing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -71,53 +160,50 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
   const [mode, setMode] = useState<MediaMode>('video')
   const [selected, setSelected] = useState<string>()
   const requestSeq = useRef(0)
-  const lastClipboard = useRef('')
+  const sources = analysis?.sources
+  const referer = analysis?.referer
 
   const analyze = useCallback(
-    async (
-      target: string,
-      ref?: string,
-      title?: string,
-      srcs?: SourceLink[],
-      opts: { cookies?: string; limited?: boolean } = {},
-    ) => {
+    async (target: string, opts: { cookies?: string; limited?: boolean } = {}) => {
       const seq = ++requestSeq.current
+      const cookies = opts.cookies ?? settings.cookiesBrowser
       setLimited(!!opts.limited)
-      setReferer(ref)
-      setPageTitle(title)
-      setSources(srcs)
-      setAnalyzedUrl(target)
+      setPastedUrl(target)
+      setAnalysis(null)
       setLoading(true)
       setError(null)
       setInfo(null)
       setSelected(undefined)
       try {
-        const data = await fetchInfo(target, opts.cookies ?? settings.cookiesBrowser, ref, opts.limited)
+        const [ytdlp, page] = await Promise.allSettled([
+          fetchInfo(target, cookies, undefined, opts.limited),
+          isMediaFileUrl(target) ? Promise.resolve(null) : scrapePage(target),
+        ])
         if (seq !== requestSeq.current) return
-        if (data.direct) {
-          // yt-dlp names direct files after the CDN script (e.g. "remote_control").
-          const name = nameFromDirectUrl(target)
-          if (name) data.title = name
-        }
-        // From the extension: the page title names generic/direct videos (yt-dlp's
-        // own title is better for sites it knows, e.g. YouTube).
-        if (title && (data.direct || data.extractor_key === 'Generic')) data.title = title
+        const result = await resolveAnalysis(target, ytdlp, page.status === 'fulfilled' ? page.value : null, cookies)
+        if (seq !== requestSeq.current) return
+        const { info: data, ...rest } = result
+        setAnalysis(rest)
         setInfo(data)
-        const hasVideo = buildVideoOptions(data, settings).length > 0
+        setFileName(data.title ?? '')
+        const hasVideo = !!rest.sources || buildVideoOptions(data, settings).length > 0
         setMode(hasVideo ? 'video' : 'audio')
 
-        // Sizes the extension could not see: ask the server (HEAD) in the background.
+        // Sizes the page does not say: ask the server (HEAD) in the background.
+        const srcs = rest.sources
         if (srcs?.some((x) => !x.size)) {
-          probeSizes(srcs.map((x) => x.url), ref).then((sizes) => {
+          probeSizes(srcs.map((x) => x.url), rest.referer).then((sizes) => {
             if (seq !== requestSeq.current) return
-            setSources((cur) => cur?.map((x, i) => (x.size ? x : { ...x, size: sizes[i] ?? undefined })))
+            setAnalysis((cur) =>
+              cur ? { ...cur, sources: cur.sources?.map((x, i) => (x.size ? x : { ...x, size: sizes[i] ?? undefined })) } : cur,
+            )
           })
         }
 
         // Direct files come without thumbnail/duration: ask ffmpeg in the background.
-        if (data.direct && !data.thumbnail) {
+        if (data.direct && (!data.thumbnail || !data.duration)) {
           setProbing(true)
-          probeMedia(data.webpage_url || target, ref)
+          probeMedia(rest.analyzed, rest.referer)
             .then((preview) => {
               if (seq !== requestSeq.current) return
               setInfo((cur) => (cur ? applyPreview(cur, preview) : cur))
@@ -128,7 +214,7 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
         }
       } catch (e) {
         if (seq !== requestSeq.current) return
-        setError(String(e))
+        setError(e instanceof Error ? e.message : String(e))
       } finally {
         if (seq === requestSeq.current) setLoading(false)
       }
@@ -136,71 +222,47 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
     [settings],
   )
 
-  // Links sent by the browser extension: paste and analyse automatically.
-  useEffect(() => {
-    if (!incoming) return
-    setUrl(incoming.url)
-    analyze(incoming.url, incoming.referer, incoming.title, incoming.sources)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [incoming?.nonce])
-
-  // Detect links copied to the clipboard when the window gains focus.
-  useEffect(() => {
-    if (!settings.autoAnalyzeClipboard) return
-    const check = async () => {
-      const text = (await readClipboard()).trim()
-      if (!text || text === lastClipboard.current) return
-      lastClipboard.current = text
-      if (looksLikeUrl(text) && text !== url && !loading) {
-        setUrl(text)
-        analyze(text)
-      }
-    }
-    // Remember whatever is already on the clipboard at startup instead of analysing it.
-    readClipboard().then((t) => (lastClipboard.current = t.trim()))
-    window.addEventListener('focus', check)
-    return () => window.removeEventListener('focus', check)
-  }, [settings.autoAnalyzeClipboard, analyze, url, loading])
-
   const isPlaylist = info?._type === 'playlist' || (info?.entries?.length ?? 0) > 0
 
   const options = useMemo(() => {
     if (!info || isPlaylist) return []
-    if (mode === 'video' && sources && sources.length > 1) return buildSourceOptions(info, sources, analyzedUrl)
+    if (mode === 'video' && sources && sources.length > 1) return buildSourceOptions(info, sources, analysis!.analyzed)
     return mode === 'video' ? buildVideoOptions(info, settings) : buildAudioOptions(info, settings)
-  }, [info, isPlaylist, mode, settings, sources, analyzedUrl])
+  }, [info, isPlaylist, mode, settings, sources, analysis])
 
   const current = options.find((o) => o.key === selected) ?? options[0]
 
-  /** File name: "<Título>-1080p" for videos sent by the extension. */
-  const fileTitle = () => {
-    if (!info) return undefined
-    if (pageTitle) {
-      const res = mode === 'video' && current?.height ? `-${current.height}p` : ''
-      return `${info.title}${res}`
-    }
-    return info.direct ? info.title : undefined
-  }
+  /** Extension the file will get, shown next to the name. */
+  const fileExt =
+    mode === 'audio'
+      ? current?.audioFormat && current.audioFormat !== 'best'
+        ? current.audioFormat
+        : undefined
+      : info?.direct || sources
+        ? current?.ext
+        : settings.mergeFormat
 
   const download = () => {
     if (!info || !current) return
+    const source = current.url ?? (info.webpage_url || url)
+    const name = fileName.replace(/\s+/g, ' ').trim()
     const item: DownloadItem = {
       id: uid(),
-      url: current.url ?? (info.webpage_url || url),
-      title: info.title,
+      url: source,
+      title: name || info.title,
       thumbnail: bestThumbnail(info),
       uploader: info.uploader ?? info.channel,
       duration: info.duration,
       qualityLabel: current.label,
       mode,
       estimatedSize: current.size,
-      request: buildRequest(current.url ?? (info.webpage_url || url), current.format, mode, settings, {
+      request: buildRequest(source, current.format, mode, settings, {
         format: current.audioFormat,
         quality: current.audioQuality,
       }, {
         remux: !!info.direct || info.extractor_key === 'Generic',
         ext: info.direct ? current.ext : undefined,
-        title: fileTitle(),
+        title: name || undefined,
         referer,
         limited,
       }),
@@ -210,7 +272,7 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
     }
     enqueue([item])
     toast.success('Añadido a descargas', {
-      description: info.title,
+      description: name || info.title,
       actionProps: { children: 'Ver', onPress: onShowDownloads, variant: 'tertiary' },
     })
   }
@@ -271,21 +333,20 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
               {settings.cookiesBrowser ? ` Ahora se usa la sesión de ${BROWSER_LABEL[settings.cookiesBrowser] ?? settings.cookiesBrowser}.` : ''}
             </Alert.Description>
             <div className="flex flex-wrap gap-2 pt-1">
-              {(extStatus?.browsers ?? [])
-                .filter((b) => b.available)
-                .map((b) => (
-                  <Button
-                    key={b.id}
-                    size="sm"
-                    onPress={() => {
-                      updateSettings({ cookiesBrowser: b.id })
-                      analyze(url, referer, pageTitle, sources, { cookies: b.id })
-                    }}
-                  >
-                    Usar mi sesión de {b.name}
-                  </Button>
-                ))}
-              <Button size="sm" variant="tertiary" onPress={() => analyze(url, referer, pageTitle, sources, { limited: true })}>
+              {SESSION_BROWSERS.map((b) => (
+                <Button
+                  key={b.id}
+                  size="sm"
+                  variant={settings.cookiesBrowser === b.id ? 'secondary' : 'primary'}
+                  onPress={() => {
+                    updateSettings({ cookiesBrowser: b.id })
+                    analyze(url, { cookies: b.id })
+                  }}
+                >
+                  Usar mi sesión de {b.name}
+                </Button>
+              ))}
+              <Button size="sm" variant="tertiary" onPress={() => analyze(url, { limited: true })}>
                 Seguir sin sesión (máx. 360p)
               </Button>
             </div>
@@ -304,7 +365,7 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
             <Alert.Title>No se pudo analizar el enlace</Alert.Title>
             <Alert.Description className="selectable break-words">{friendlyError(error, settings.cookiesBrowser)}</Alert.Description>
           </Alert.Content>
-          <Button size="sm" variant="danger-soft" onPress={() => analyze(url, referer, pageTitle, sources, { limited })}>
+          <Button size="sm" variant="danger-soft" onPress={() => analyze(url, { limited })}>
             Reintentar
           </Button>
         </Alert>
@@ -321,9 +382,23 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
 
       {info && !isPlaylist && (
         <>
-          <MediaCard info={info} loadingPreview={probing} />
+          <MediaCard info={info} loadingPreview={probing} site={hostnameOf(pastedUrl)} />
 
           <Card className="gap-5 p-5">
+            <TextField value={fileName} onChange={setFileName} className="gap-1.5">
+              <Label className="text-sm font-medium">Nombre del archivo</Label>
+              <div className="flex min-w-0 items-center gap-2">
+                {/* Grows with the name: an invisible copy of the text sizes the grid cell. */}
+                <div className="inline-grid min-w-0 max-w-full *:col-start-1 *:row-start-1">
+                  <span aria-hidden className="invisible overflow-hidden border px-3 pr-4 text-base whitespace-pre sm:text-sm">
+                    {fileName || info.title}
+                  </span>
+                  <Input className="w-full min-w-40" placeholder={info.title} />
+                </div>
+                {fileExt && <span className="shrink-0 text-sm font-medium text-muted">.{fileExt}</span>}
+              </div>
+            </TextField>
+
             <div className="flex items-center justify-between gap-4">
               <Tabs
                 selectedKey={mode}
@@ -398,7 +473,7 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
             </div>
           </Card>
 
-          <div className="sticky bottom-0 -mx-8 flex items-center gap-4 border-t border-separator bg-background/85 px-8 py-4 backdrop-blur-md">
+          <div className="surface sticky bottom-4 flex items-center gap-4 rounded-3xl px-6 py-4 shadow-overlay backdrop-blur-md">
             <div className="min-w-0 flex-1">
               <FolderPicker compact />
             </div>
@@ -411,6 +486,15 @@ export function DownloadView({ onShowDownloads, incoming }: Props) {
       )}
     </div>
   )
+}
+
+/** `https://www.youtube.com/watch?…` → `youtube.com` */
+function hostnameOf(url: string): string | undefined {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '') || undefined
+  } catch {
+    return undefined
+  }
 }
 
 const BROWSER_LABEL: Record<string, string> = {

@@ -21,24 +21,12 @@
 - **Cola de descargas**: varias descargas simultáneas, con progreso, velocidad y tiempo restante; cancelar, reintentar, abrir el archivo o mostrarlo en la carpeta.
 - **Playlists**: elige qué videos descargar y en qué calidad.
 - **Extras**: subtítulos incrustados, capítulos, SponsorBlock y cookies del navegador para videos privados o con restricción de edad.
+- **Cualquier página web**: pega el enlace de la página y Streamline la lee para sacar el **título del video**, la portada y **todas las calidades** que ofrece el reproductor en su menú (etiquetas `<source>`, la configuración del reproductor o el manifiesto HLS/DASH), aunque la página solo cargue una.
+- **Renombrar antes de descargar**: el nombre del archivo se puede editar en la misma pantalla de calidades.
 - **Enlaces directos**: para archivos sueltos (`.mp4` de un CDN) genera la miniatura y lee duración, resolución y FPS con ffmpeg.
 - **Nombres sin choques**: cada archivo lleva un hash corto (`video [a1b2c3d4].mp4`), así que dos videos con el mismo título nunca se sobrescriben.
-- **Editor de video**: elimina partes con cortes múltiples, cambia el título y la portada (captura un fotograma a resolución completa) y guarda como copia o sobre el original. Los cortes son **sin pérdida**: no recodifican, así que un 4K sigue siendo exactamente el mismo 4K. Opcionalmente, corte exacto al fotograma recodificando en alta calidad.
 - **YouTube con tu sesión**: si YouTube pide confirmar que no eres un robot, un clic usa tu sesión de Brave o Chrome (todas las calidades) o sigue sin sesión hasta 360p.
-- **Extensión de navegador** para Chrome, Brave y Edge (ver abajo).
 - **Tema claro y oscuro**, interfaz en español.
-
-## 🧩 Extensión para Chrome, Brave y Edge
-
-La extensión detecta los videos de la página que estás viendo: reproductores `<video>`, enlaces a archivos `.mp4`/`.webm` y streams HLS/DASH. Agrupa todas las calidades del mismo video en **una sola tarjeta** (por ejemplo "4 calidades · hasta 4K"). El botón **Descargar en la app** envía todas las fuentes a Streamline, que muestra una opción por resolución (2160p60, 1080p, 720p…) para que elijas cuál descargar. El archivo se nombra `<Título de la página>-1080p [hash].mp4`.
-
-**Instalación:** la app incluye la extensión. La primera vez que abres Streamline aparece un asistente:
-
-1. Elige **Google Chrome** o **Brave**. La app copia la extensión a su carpeta de datos (`~/Library/Application Support/com.luisfalconmx.streamline/extension` en macOS, `%APPDATA%\com.luisfalconmx.streamline\extension` en Windows). En macOS además crea el acceso directo `~/Streamline Extension`.
-2. Pulsa **Abrir extensiones de…**. Streamline se queda como panel flotante con los pasos: activar *Modo de desarrollador*, *Cargar descomprimida* y elegir la carpeta (en macOS: ⌘⇧H → *Streamline Extension*).
-3. Al cargarla, el navegador pregunta *¿Abrir Streamline?*: marca **Permitir siempre**. La extensión avisa a la app y el asistente termina solo.
-
-Si cierras el asistente, un aviso arriba de la app te recuerda instalarla hasta que se detecte. También está en **Ajustes → Extensión del navegador**. Chrome y Brave no permiten instalar extensiones de fuera de su tienda sin esa confirmación del usuario.
 
 ## 📦 Instalación
 
@@ -78,9 +66,9 @@ streamline/
 │   └── store.tsx            # Estado global: ajustes, cola de descargas e historial
 ├── src-tauri/               # Backend Rust
 │   ├── src/ytdlp.rs         # Ejecuta yt-dlp, parsea el progreso y emite eventos
+│   ├── src/scrape.rs        # Lee la página: título, portada y calidades del reproductor
 │   ├── binaries/            # Sidecars (se descargan con `pnpm sidecars`, no se versionan)
 │   └── tauri.conf.json
-├── extension/               # Extensión MV3 (Chrome/Brave/Edge)
 ├── scripts/fetch-sidecars.mjs
 ├── docker/ + compose.yaml   # Entorno de desarrollo con Docker Desktop
 └── .github/workflows/       # CI y release multiplataforma

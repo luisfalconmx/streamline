@@ -26,15 +26,67 @@ textarea,
   -webkit-user-select: text;
 }
 
-.brand-gradient {
-  background-image: linear-gradient(135deg, #6366f1 0%, #8b5cf6 45%, #ec4899 100%);
+/*
+ * Dark only, Vercel style: near-black background, dark gray surfaces with a
+ * hairline border, and the purple → pink brand as a faint glow.
+ */
+:root,
+.dark,
+[data-theme] {
+  color-scheme: dark;
+  --brand-from: #7b2cbf;
+  --brand-via: #b44fd8;
+  --brand-to: #ff758c;
+  --accent: #9d4edd;
+  --accent-foreground: #fff;
+  --focus: #c77dff;
+
+  --background: #000;
+  --surface: #0e0e10;
+  --field-background: #151518;
+  --border: rgb(255 255 255 / 0.1);
+  --separator: rgb(255 255 255 / 0.07);
+
+  /* Every field gets a visible border. */
+  --field-border-width: 1px;
+  --border-width-field: 1px;
+  --field-border: rgb(255 255 255 / 0.12);
+}
+
+.brand-gradient,
+.button--primary {
+  background-image: linear-gradient(135deg, var(--brand-from) 0%, var(--brand-via) 50%, var(--brand-to) 100%);
+}
+.button--primary:hover {
+  filter: brightness(1.1);
 }
 
 .brand-text {
-  background-image: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+  background-image: linear-gradient(135deg, #c77dff 0%, #e27bd0 50%, #ff758c 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* Black with barely visible brand glows. */
+.app-bg {
+  background:
+    radial-gradient(ellipse 70% 45% at 15% -5%, rgb(157 78 221 / 0.16), transparent 70%),
+    radial-gradient(ellipse 55% 40% at 90% 5%, rgb(255 117 140 / 0.08), transparent 70%),
+    radial-gradient(ellipse 70% 45% at 50% 110%, rgb(90 24 154 / 0.14), transparent 70%),
+    #000;
+}
+
+/* Hairline border on cards and panels instead of shadows. */
+.card,
+.alert,
+.surface {
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+/* Surface panel (sticky download bar). */
+.surface {
+  background-color: color-mix(in oklab, var(--surface) 88%, transparent);
 }
 
 .scroll-area {

@@ -35,7 +35,7 @@ export function QualityPicker({ options, selected, onSelect }: Props) {
             <div className="flex items-center gap-2">
               <span className="text-base font-semibold">{o.label}</span>
               {o.badge && (
-                <Chip size="sm" variant={active ? 'primary' : 'soft'} color={active ? 'accent' : 'default'}>
+                <Chip size="sm" variant="soft" color="accent">
                   {o.badge}
                 </Chip>
               )}

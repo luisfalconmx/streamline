@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Builds the macOS .dmg files locally (Apple Silicon + Intel), zips the browser
- * extension and uploads everything to the GitHub Release of the current version.
+ * and uploads everything to the GitHub Release of the current version.
  *
  * Usage: pnpm release:mac            (both architectures)
  *        pnpm release:mac --arm-only (only Apple Silicon)
@@ -29,12 +29,6 @@ for (const [triple, arch] of targets) {
   dmgs.push(join(ROOT, 'src-tauri/target', triple, 'release/bundle/dmg', `Streamline_${version}_${arch}.dmg`))
 }
 
-// Browser extension (Chrome/Brave/Edge), zipped for "Load unpacked".
-const extVersion = JSON.parse(readFileSync(join(ROOT, 'extension/manifest.json'), 'utf8')).version
-const zip = join(ROOT, 'src-tauri/target', `streamline-extension-${extVersion}.zip`)
-run('rm', ['-f', zip])
-execFileSync('zip', ['-qr', zip, '.', '-x', '.*'], { cwd: join(ROOT, 'extension'), stdio: 'inherit' })
-
 console.log(`\n▶ Subiendo a ${tag}`)
-run('gh', ['release', 'upload', tag, ...dmgs, zip, '--clobber'])
+run('gh', ['release', 'upload', tag, ...dmgs, '--clobber'])
 console.log('Listo.')
