@@ -9,6 +9,8 @@
   App de escritorio para <b>macOS</b>, <b>Windows</b> y <b>Linux</b>, impulsada por <a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a>.
 </p>
 
+<p align="center"><a href="https://streamline-iota-sand.vercel.app"><b>streamline-iota-sand.vercel.app</b></a></p>
+
 ---
 
 ## ✨ Funciones
@@ -72,6 +74,7 @@ streamline/
 │   ├── binaries/            # Sidecars (se descargan con `pnpm sidecars`, no se versionan)
 │   └── tauri.conf.json
 ├── scripts/                 # Sidecars y publicación (release-*.mjs: instaladores sin versión + latest.json)
+├── landing/               # Página de presentación (Vercel, raíz del proyecto: landing/)
 ├── docker/ + compose.yaml   # Entorno de desarrollo con Docker Desktop
 └── .github/workflows/       # CI y release multiplataforma
 ```

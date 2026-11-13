@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="es" class="dark" style="color-scheme: dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Streamline — Descarga cualquier video. Sin límites.</title>
+  <meta name="description" content="App de escritorio gratuita para descargar videos y audio de YouTube y más de 1.800 sitios a máxima velocidad. Para macOS, Windows y Linux." />
+  <meta property="og:title" content="Streamline — Descarga cualquier video. Sin límites." />
+  <meta property="og:description" content="Pega un enlace, elige la calidad y descarga a máxima velocidad. Hasta 8K, solo audio y cualquier página web. macOS, Windows y Linux." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#000000" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #000;
+      --surface: #0e0e10;
+      --surface-2: #151518;
+      --surface-3: #1c1c20;
+      --fg: #fafafa;
+      --muted: #a1a1aa;
+      --muted-2: #71717a;
+      --border: rgb(255 255 255 / 0.1);
+      --border-2: rgb(255 255 255 / 0.16);
+      --accent: #9d4edd;
+      --accent-soft: rgb(157 78 221 / 0.16);
+      --accent-fg: #d6a8ff;
+      --brand: linear-gradient(135deg, #7b2cbf 0%, #b44fd8 50%, #ff758c 100%);
+      --brand-text: linear-gradient(135deg, #c77dff 0%, #e27bd0 50%, #ff758c 100%);
+      --radius: 24px;
+      --gutter: 16px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: var(--fg);
+      background:
+        radial-gradient(ellipse 70% 45% at 15% -5%, rgb(157 78 221 / 0.16), transparent 70%),
+        radial-gradient(ellipse 55% 40% at 90% 5%, rgb(255 117 140 / 0.08), transparent 70%),
+        radial-gradient(ellipse 70% 45% at 50% 110%, rgb(90 24 154 / 0.14), transparent 70%),
+        var(--bg);
+      background-attachment: fixed;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+    }
+    a { color: inherit; text-decoration: none; }
+    .wrap { width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 var(--gutter); }
+    @media (min-width: 768px) { :root { --gutter: 32px; } }
+    .brand-text { background-image: var(--brand-text); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .muted { color: var(--muted); }
+    svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* Header */
+    header.top { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); background: rgb(0 0 0 / 0.55); border-bottom: 1px solid var(--border); }
+    header.top .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; gap: 16px; }
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
+    .logo img { width: 32px; height: 32px; }
+    .ver { font-size: 12px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+    nav.links { display: flex; align-items: center; gap: 4px; }
+    nav.links a { font-size: 14px; color: var(--muted); padding: 8px 12px; border-radius: 999px; transition: color .15s, background .15s; }
+    nav.links a:hover { color: var(--fg); background: rgb(255 255 255 / 0.06); }
+    nav.links .hide-sm { display: none; }
+    @media (min-width: 640px) { nav.links .hide-sm { display: inline-flex; } }
+    nav.links .gh { display: inline-flex; align-items: center; gap: 6px; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; font: inherit; font-weight: 600; border: 0; cursor: pointer; border-radius: 999px; transition: filter .15s, background .15s, border-color .15s; white-space: nowrap; }
+    .btn-primary { background-image: var(--brand); color: #fff; height: 56px; padding: 0 28px; font-size: 16px; box-shadow: 0 10px 40px -10px rgb(180 79 216 / 0.6); }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-primary .sub { font-weight: 500; opacity: .85; font-size: 14px; }
+    .btn-ghost { background: rgb(255 255 255 / 0.06); color: var(--fg); height: 56px; padding: 0 24px; font-size: 15px; border: 1px solid var(--border); }
+    .btn-ghost:hover { background: rgb(255 255 255 / 0.1); }
+    .btn-sm { height: 38px; padding: 0 16px; font-size: 14px; }
+
+    /* Hero */
+    .hero { text-align: center; padding: 72px 0 40px; }
+    @media (min-width: 768px) { .hero { padding: 104px 0 56px; } }
+    .hero .icon { width: 72px; height: 72px; margin: 0 auto 28px; filter: drop-shadow(0 12px 32px rgb(180 79 216 / 0.45)); }
+    .hero h1 { font-size: clamp(36px, 7vw, 68px); line-height: 1.05; letter-spacing: -0.035em; font-weight: 800; margin: 0 auto 20px; max-width: 900px; }
+    .hero p.lead { font-size: clamp(16px, 2.2vw, 19px); color: var(--muted); max-width: 640px; margin: 0 auto 36px; }
+    .cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+    .cta-note { margin-top: 16px; font-size: 13px; color: var(--muted-2); }
+    .cta-note a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+    .cta-note a:hover { color: var(--fg); }
+    .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 40px; }
+    .chip { font-size: 12px; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; }
+
+    /* App mock */
+    .mock-wrap { position: relative; margin: 24px auto 0; max-width: 1000px; }
+    .mock-wrap::before { content: ""; position: absolute; inset: -40px 10% auto; height: 220px; background: radial-gradient(ellipse at center, rgb(157 78 221 / 0.35), transparent 70%); filter: blur(30px); z-index: -1; }
+    .mock { text-align: left; border-radius: 18px; background: #050506; box-shadow: 0 0 0 1px var(--border), 0 40px 120px -30px rgb(0 0 0 / 0.9); overflow: hidden; }
+    .mock-bar { height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid var(--border); background: #0a0a0c; }
+    .mock-bar span { width: 11px; height: 11px; border-radius: 50%; background: #2a2a30; }
+    .mock-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--border); }
+    .mock-head .logo { font-size: 15px; gap: 8px; }
+    .mock-head .logo img { width: 24px; height: 24px; }
+    .tabs { display: flex; gap: 2px; padding: 3px; border-radius: 12px; background: var(--surface-3); font-size: 12px; }
+    .tabs span { padding: 5px 12px; border-radius: 9px; color: var(--muted); }
+    .tabs span.on { background: #2a2a30; color: var(--fg); }
+    .mock-body { padding: 18px; display: grid; gap: 14px; background:
+        radial-gradient(ellipse 70% 60% at 10% 0%, rgb(157 78 221 / 0.12), transparent 70%), #020203; }
+    .mock-body > * { min-width: 0; }
+    .url { display: flex; gap: 8px; }
+    .url .field { flex: 1; min-width: 0; height: 40px; border-radius: 12px; background: var(--surface-2); box-shadow: 0 0 0 1px var(--accent); display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 13px; color: var(--fg); overflow: hidden; white-space: nowrap; }
+    .url .field svg { color: var(--muted); }
+    .url .go { height: 40px; padding: 0 16px; border-radius: 12px; background-image: var(--brand); font-size: 13px; font-weight: 600; display: flex; align-items: center; }
+    .card { background: var(--surface); border-radius: 18px; box-shadow: 0 0 0 1px var(--border); }
+    .media { display: flex; gap: 16px; padding: 12px; }
+    .thumb { position: relative; width: 38%; max-width: 240px; aspect-ratio: 16/9; border-radius: 12px; flex: none; overflow: hidden;
+      background:
+        radial-gradient(circle at 30% 70%, #ff9a76 0 12%, transparent 13%),
+        linear-gradient(180deg, #5a2a8a 0%, #c0587a 45%, #ff9a76 60%, #2b1840 61%, #120c1c 100%); }
+    .thumb::after { content: "10:34"; position: absolute; right: 6px; bottom: 6px; font-size: 10px; font-weight: 600; background: rgb(0 0 0 / .75); border-radius: 5px; padding: 1px 5px; }
+    .media .meta { min-width: 0; display: flex; flex-direction: column; gap: 6px; padding-top: 2px; }
+    .tag { align-self: flex-start; font-size: 11px; font-weight: 500; color: var(--accent-fg); background: var(--accent-soft); border-radius: 999px; padding: 2px 8px; }
+    .media h4 { margin: 0; font-size: clamp(14px, 2vw, 18px); line-height: 1.3; }
+    .media .facts { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 14px; }
+    .qual { padding: 14px; display: grid; gap: 12px; }
+    .qual .name { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+    .qual .name b { color: var(--fg); font-weight: 500; background: var(--surface-2); box-shadow: 0 0 0 1px rgb(255 255 255 / .12); border-radius: 10px; padding: 6px 10px; font-size: 12px; }
+    .grid-q { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .q { border-radius: 14px; border: 1px solid var(--border); background: var(--surface); padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
+    .q.on { border-color: var(--accent); background: var(--accent-soft); }
+    .q .t { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 14px; }
+    .q .t small { font-size: 10px; font-weight: 500; color: var(--accent-fg); background: var(--accent-soft); border-radius: 999px; padding: 1px 6px; }
+    .q .s { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .q .z { font-size: 12px; font-weight: 500; }
+    .dl-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 16px; font-size: 12px; color: var(--muted); }
+    .dl-bar .go { height: 36px; padding: 0 16px; border-radius: 999px; background-image: var(--brand); color: #fff; font-weight: 600; display: flex; align-items: center; gap: 6px; font-size: 13px; }
+    @media (max-width: 560px) {
+      .grid-q { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-q .q:nth-child(3) { display: none; }
+      .media { flex-direction: column; }
+      .thumb { width: 100%; max-width: none; }
+      .mock-head { grid-template-columns: 1fr; }
+      .mock-head .tabs, .mock-head > :last-child { display: none; }
+      .url .go { display: none; }
+    }
+
+    /* Sections */
+    section.block { padding: 88px 0 0; }
+    .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--accent-fg); margin: 0 0 12px; }
+    h2 { font-size: clamp(28px, 4.5vw, 44px); letter-spacing: -0.03em; line-height: 1.1; margin: 0 0 14px; }
+    .section-lead { color: var(--muted); max-width: 620px; margin: 0 0 40px; font-size: 17px; }
+    .features { display: grid; gap: 14px; grid-template-columns: 1fr; }
+    @media (min-width: 640px) { .features { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 960px) { .features { grid-template-columns: repeat(3, 1fr); } }
+    .feature { padding: 24px; border-radius: var(--radius); background: var(--surface); box-shadow: 0 0 0 1px var(--border); }
+    .feature .ico { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; background: var(--accent-soft); color: var(--accent-fg); margin-bottom: 16px; }
+    .feature .ico svg { width: 20px; height: 20px; }
+    .feature h3 { margin: 0 0 6px; font-size: 17px; letter-spacing: -0.01em; }
+    .feature p { margin: 0; color: var(--muted); font-size: 15px; }
+
+    .steps { display: grid; gap: 14px; grid-template-columns: 1fr; counter-reset: s; }
+    @media (min-width: 768px) { .steps { grid-template-columns: repeat(3, 1fr); } }
+    .step { padding: 24px; border-radius: var(--radius); background: var(--surface); box-shadow: 0 0 0 1px var(--border); }
+    .step::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background-image: var(--brand); font-weight: 700; font-size: 14px; margin-bottom: 14px; }
+    .step h3 { margin: 0 0 6px; font-size: 17px; }
+    .step p { margin: 0; color: var(--muted); font-size: 15px; }
+
+    .platforms { display: grid; gap: 14px; grid-template-columns: 1fr; }
+    @media (min-width: 768px) { .platforms { grid-template-columns: repeat(3, 1fr); } }
+    .platform { position: relative; padding: 24px; border-radius: var(--radius); background: var(--surface); box-shadow: 0 0 0 1px var(--border); display: flex; flex-direction: column; gap: 14px; }
+    .platform.current { box-shadow: 0 0 0 1px var(--accent), 0 20px 60px -30px rgb(157 78 221 / .8); }
+    .platform .badge { position: absolute; top: 18px; right: 18px; font-size: 11px; font-weight: 600; color: var(--accent-fg); background: var(--accent-soft); border-radius: 999px; padding: 3px 9px; display: none; }
+    .platform.current .badge { display: inline-block; }
+    .platform .head { display: flex; align-items: center; gap: 12px; }
+    .platform .head .ico { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--surface-3); }
+    .platform .head .ico svg { width: 22px; height: 22px; }
+    .platform h3 { margin: 0; font-size: 18px; }
+    .platform .req { margin: 0; font-size: 13px; color: var(--muted-2); }
+    .files { display: grid; gap: 8px; margin-top: auto; }
+    .file { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); box-shadow: 0 0 0 1px var(--border); font-size: 14px; transition: box-shadow .15s, background .15s; }
+    .file:hover { box-shadow: 0 0 0 1px var(--border-2); background: var(--surface-3); }
+    .file .l { display: flex; flex-direction: column; min-width: 0; }
+    .file .l b { font-weight: 600; }
+    .file .l span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .file svg { color: var(--muted); }
+
+    .notes { display: grid; gap: 14px; grid-template-columns: 1fr; margin-top: 14px; }
+    @media (min-width: 768px) { .notes { grid-template-columns: 1fr 1fr; } }
+    .note { padding: 20px 22px; border-radius: 20px; background: var(--surface); box-shadow: 0 0 0 1px var(--border); font-size: 14px; color: var(--muted); }
+    .note b { color: var(--fg); }
+    .cmd { display: flex; align-items: center; gap: 8px; margin-top: 12px; background: #050506; box-shadow: 0 0 0 1px var(--border); border-radius: 12px; padding: 8px 8px 8px 14px; }
+    .cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--fg); }
+    .copy { font: inherit; font-size: 12px; font-weight: 600; color: var(--fg); background: var(--surface-3); border: 0; border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+    .copy:hover { background: #2a2a30; }
+
+    .final { margin: 96px 0 0; padding: 56px 24px; text-align: center; border-radius: 32px; background:
+        radial-gradient(ellipse 60% 80% at 50% 0%, rgb(157 78 221 / .22), transparent 70%), var(--surface);
+      box-shadow: 0 0 0 1px var(--border); }
+    .final h2 { margin-bottom: 12px; }
+    .final p { color: var(--muted); margin: 0 auto 28px; max-width: 520px; }
+
+    footer { padding: 48px 0 56px; margin-top: 64px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted-2); }
+    footer .wrap { display: flex; flex-wrap: wrap; gap: 16px 32px; justify-content: space-between; }
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--fg); }
+    footer p { margin: 0; max-width: 560px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="logo" href="#">
+        <img src="/favicon.svg" alt="" />
+        Streamline
+        <span class="ver" data-version>v1.0.0</span>
+      </a>
+      <nav class="links">
+        <a class="hide-sm" href="#funciones">Funciones</a>
+        <a class="hide-sm" href="#descargar">Descargar</a>
+        <a class="gh" href="https://github.com/luisfalconmx/streamline" target="_blank" rel="noopener">
+          <svg class="i" viewBox="0 0 24 24" style="fill:currentColor;stroke:none"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.8 0 3.2.9.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1 .9 2.2v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>
+          GitHub
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <img class="icon" src="/favicon.svg" alt="" />
+        <h1>Descarga cualquier video. <span class="brand-text">Sin límites.</span></h1>
+        <p class="lead">Pega un enlace y elige la calidad. Streamline descarga a máxima velocidad usando fragmentos en paralelo, sin anuncios y sin límites de tamaño.</p>
+        <div class="cta">
+          <a class="btn btn-primary" id="primary-download" href="#descargar">
+            <svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            <span id="primary-label">Descargar Streamline</span>
+            <span class="sub" id="primary-sub"></span>
+          </a>
+          <a class="btn btn-ghost" href="#descargar">Otras plataformas</a>
+        </div>
+        <p class="cta-note" id="cta-note">Gratis y de código abierto · macOS, Windows y Linux</p>
+
+        <div class="mock-wrap" aria-hidden="true">
+          <div class="mock">
+            <div class="mock-bar"><span></span><span></span><span></span></div>
+            <div class="mock-head">
+              <div class="logo"><img src="/favicon.svg" alt="" />Streamline <span class="ver" data-version>v1.0.0</span></div>
+              <div class="tabs"><span class="on">Descargar</span><span>Descargas</span><span>Ajustes</span></div>
+              <div></div>
+            </div>
+            <div class="mock-body">
+              <div class="url">
+                <div class="field">
+                  <svg class="i" viewBox="0 0 24 24"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>
+                  https://www.youtube.com/watch?v=alpes-4k
+                </div>
+                <div class="go">Analizar</div>
+              </div>
+              <div class="card media">
+                <div class="thumb"></div>
+                <div class="meta">
+                  <span class="tag">youtube.com</span>
+                  <h4>Explorando los Alpes en 4K — Un viaje cinematográfico</h4>
+                  <div class="facts"><span>Nature Films</span><span>10:34</span><span>1,8 M vistas</span></div>
+                </div>
+              </div>
+              <div class="card qual">
+                <div class="name">Nombre del archivo <b>Explorando los Alpes en 4K</b> .mp4</div>
+                <div class="grid-q">
+                  <div class="q on"><div class="t">2160p60 <small>4K</small></div><div class="s">VP9 · 60 fps · AAC</div><div class="z">1,5 GB</div></div>
+                  <div class="q"><div class="t">1440p60 <small>2K</small></div><div class="s">VP9 · 60 fps · AAC</div><div class="z">820 MB</div></div>
+                  <div class="q"><div class="t">1080p60 <small>Full HD</small></div><div class="s">H.264 · 60 fps · AAC</div><div class="z">502 MB</div></div>
+                </div>
+              </div>
+              <div class="card dl-bar">
+                <span>~/Downloads</span>
+                <span class="go">
+                  <svg class="i" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                  Descargar · 1,5 GB
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chips">
+          <span class="chip">YouTube</span><span class="chip">TikTok</span><span class="chip">Instagram</span><span class="chip">X / Twitter</span><span class="chip">Facebook</span><span class="chip">Vimeo</span><span class="chip">Twitch</span><span class="chip">Reddit</span><span class="chip">SoundCloud</span><span class="chip">Dailymotion</span><span class="chip">+1.800 sitios</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="funciones">
+      <div class="wrap">
+        <p class="eyebrow">Funciones</p>
+        <h2>Todo lo que necesitas para guardar un video.</h2>
+        <p class="section-lead">Impulsado por yt-dlp y ffmpeg, ya incluidos. Instalas la app y listo: no hay nada más que configurar.</p>
+        <div class="features">
+          <div class="feature">
+            <div class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></div>
+            <h3>Velocidad máxima</h3>
+            <p>Hasta 32 fragmentos en paralelo y sin límite de ancho de banda. Evita el throttling de los sitios.</p>
+          </div>
+          <div class="feature">
+            <div class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/><path d="M19 3v4M17 5h4"/></svg></div>
+            <h3>Hasta 8K y HDR</h3>
+            <p>Elige resolución, FPS y formato viendo el peso exacto del archivo antes de descargar.</p>
+          </div>
+          <div class="feature">
+            <div class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+            <h3>Solo audio</h3>
+            <p>Extrae MP3, M4A, Opus, FLAC o WAV con portada y metadatos incluidos.</p>
+          </div>
+          <div class="feature">
+            <div class="ico"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></div>
+            <h3>Cualquier página web</h3>
+            <p>Lee la página que pegas para sacar el título, la portada y todas las calidades del reproductor, aunque solo cargue una.</p>
+          </div>
+          <div class="feature">
+            <div class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
+            <h3>Tu nombre, tu carpeta</h3>
+            <p>Renombra el archivo antes de descargar. En tu carpeta solo aparece el resultado final, sin archivos temporales.</p>
+          </div>
+          <div class="feature">
+            <div class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></div>
+            <h3>Se actualiza sola</h3>
+            <p>Cuando hay una versión nueva aparece un botón: un clic y se instala sobre la actual. Nada de desinstalar y volver a instalar.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="wrap">
+        <p class="eyebrow">Cómo funciona</p>
+        <h2>Tres pasos. Sin anuncios.</h2>
+        <p class="section-lead">Sin cuentas, sin extensiones y sin páginas llenas de publicidad.</p>
+        <div class="steps">
+          <div class="step"><h3>Pega el enlace</h3><p>De YouTube, TikTok, Instagram o de cualquier página con un video.</p></div>
+          <div class="step"><h3>Elige la calidad</h3><p>Video hasta 8K o solo audio, con el tamaño final de cada opción.</p></div>
+          <div class="step"><h3>Descarga</h3><p>Sigue el progreso en la cola y abre el archivo con un clic cuando termine.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="descargar">
+      <div class="wrap">
+        <p class="eyebrow">Descargar</p>
+        <h2>Gratis para macOS, Windows y Linux.</h2>
+        <p class="section-lead">Los instaladores siempre apuntan a la última versión e incluyen yt-dlp, ffmpeg y deno.</p>
+        <div class="platforms">
+          <div class="platform" data-os="mac">
+            <span class="badge">Tu sistema</span>
+            <div class="head">
+              <div class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z"/><path d="M10 2c1 .5 2 2 2 5"/></svg></div>
+              <div><h3>macOS</h3><p class="req">macOS 11 o superior</p></div>
+            </div>
+            <div class="files">
+              <a class="file" data-asset="Streamline_aarch64.dmg"><span class="l"><b>Apple Silicon</b><span>M1, M2, M3, M4 · .dmg</span></span><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></a>
+              <a class="file" data-asset="Streamline_x64.dmg"><span class="l"><b>Intel</b><span>.dmg</span></span><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></a>
+            </div>
+          </div>
+          <div class="platform" data-os="windows">
+            <span class="badge">Tu sistema</span>
+            <div class="head">
+              <div class="ico"><svg class="i" viewBox="0 0 24 24" style="fill:currentColor;stroke:none"><path d="M3 5.5 10.5 4.5v7H3zM11.5 4.3 21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg></div>
+              <div><h3>Windows</h3><p class="req">Windows 10 u 11 · 64 bits</p></div>
+            </div>
+            <div class="files">
+              <a class="file" data-asset="Streamline_x64-setup.exe"><span class="l"><b>Instalador</b><span>Recomendado · .exe</span></span><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></a>
+              <a class="file" data-asset="Streamline_x64.msi"><span class="l"><b>MSI</b><span>Para empresas · .msi</span></span><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></a>
+            </div>
+          </div>
+          <div class="platform" data-os="linux">
+            <span class="badge">Tu sistema</span>
+            <div class="head">
+              <div class="ico"><svg class="i" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg></div>
+              <div><h3>Linux</h3><p class="req">x86_64</p></div>
+            </div>
+            <div class="files">
+              <a class="file" data-asset="Streamline_amd64.AppImage"><span class="l"><b>AppImage</b><span>Recomendado · se actualiza sola</span></span><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></a>
+              <a class="file" data-asset="Streamline_amd64.deb"><span class="l"><b>Debian / Ubuntu</b><span>.deb</span></span><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></a>
+              <a class="file" data-asset="Streamline.x86_64.rpm"><span class="l"><b>Fedora / openSUSE</b><span>.rpm</span></span><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></a>
+            </div>
+          </div>
+        </div>
+
+        <div class="notes">
+          <div class="note">
+            <b>macOS:</b> la app no está firmada con un certificado de Apple. Si al abrirla aparece «está dañada», ejecuta una vez en la Terminal:
+            <div class="cmd"><code>xattr -cr /Applications/Streamline.app</code><button class="copy" type="button" data-copy="xattr -cr /Applications/Streamline.app">Copiar</button></div>
+          </div>
+          <div class="note">
+            <b>Windows:</b> si SmartScreen muestra un aviso, pulsa <b>Más información</b> → <b>Ejecutar de todas formas</b>. Es normal en apps nuevas que aún no tienen reputación.
+          </div>
+        </div>
+
+        <div class="final">
+          <h2>Empieza a descargar <span class="brand-text">en segundos.</span></h2>
+          <p>Gratis, sin anuncios y de código abierto.</p>
+          <a class="btn btn-primary" id="final-download" href="#descargar">
+            <svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            <span id="final-label">Descargar Streamline</span>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p>Streamline · <span data-version>v1.0.0</span> · Hecho por <a href="https://github.com/luisfalconmx" target="_blank" rel="noopener">luisfalconmx</a>. Impulsado por <a href="https://github.com/yt-dlp/yt-dlp" target="_blank" rel="noopener">yt-dlp</a> y <a href="https://ffmpeg.org" target="_blank" rel="noopener">FFmpeg</a>.</p>
+      <p>Descarga solo contenido del que tengas derechos o permiso, y respeta los términos de cada sitio.</p>
+    </div>
+  </footer>
+
+  <script>
+    const REPO = 'luisfalconmx/streamline'
+    const LATEST = `https://github.com/${REPO}/releases/latest/download/`
+    const OPTIONS = {
+      'mac-arm': { asset: 'Streamline_aarch64.dmg', label: 'Descargar para macOS', sub: 'Apple Silicon', note: '¿Tu Mac tiene procesador Intel? <a href="' + LATEST + 'Streamline_x64.dmg">Descarga esta versión</a>' },
+      'mac-x64': { asset: 'Streamline_x64.dmg', label: 'Descargar para macOS', sub: 'Intel', note: '¿Tu Mac tiene chip M1–M4? <a href="' + LATEST + 'Streamline_aarch64.dmg">Descarga la versión Apple Silicon</a>' },
+      windows: { asset: 'Streamline_x64-setup.exe', label: 'Descargar para Windows', sub: '64 bits', note: 'También disponible como <a href="' + LATEST + 'Streamline_x64.msi">.msi</a>' },
+      linux: { asset: 'Streamline_amd64.AppImage', label: 'Descargar para Linux', sub: 'AppImage', note: 'También como <a href="' + LATEST + 'Streamline_amd64.deb">.deb</a> o <a href="' + LATEST + 'Streamline.x86_64.rpm">.rpm</a>' },
+    }
+
+    // Every file link points to the latest release.
+    document.querySelectorAll('[data-asset]').forEach((a) => (a.href = LATEST + a.dataset.asset))
+
+    function detectOS() {
+      const ua = navigator.userAgent
+      const touchMac = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1 // iPad
+      if (/Android|iPhone|iPad|iPod/i.test(ua) || touchMac) return 'mobile'
+      const platform = navigator.userAgentData?.platform || navigator.platform || ''
+      if (/mac/i.test(platform) || /Macintosh/.test(ua)) return 'mac'
+      if (/win/i.test(platform) || /Windows/.test(ua)) return 'windows'
+      if (/linux|x11|cros/i.test(platform + ua)) return 'linux'
+      return 'unknown'
+    }
+
+    /** Apple Silicon vs Intel: Chromium tells the architecture; Safari/Firefox, the GPU. */
+    async function detectMacArch() {
+      try {
+        const v = await navigator.userAgentData?.getHighEntropyValues?.(['architecture'])
+        if (v?.architecture) return v.architecture === 'arm' ? 'arm' : 'x64'
+      } catch {}
+      try {
+        const gl = document.createElement('canvas').getContext('webgl')
+        const ext = gl && gl.getExtension('WEBGL_debug_renderer_info')
+        const gpu = gl ? String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)) : ''
+        if (/Intel|AMD|Radeon|NVIDIA/i.test(gpu)) return 'x64'
+      } catch {}
+      return 'arm' // every Mac sold since 2021
+    }
+
+    function formatSize(bytes) {
+      return bytes ? `${Math.round(bytes / 1048576)} MB` : ''
+    }
+
+    async function init() {
+      const os = detectOS()
+      let key = os
+      if (os === 'mac') key = 'mac-' + (await detectMacArch())
+      const opt = OPTIONS[key]
+
+      const primary = document.getElementById('primary-download')
+      const final = document.getElementById('final-download')
+      if (opt) {
+        primary.href = final.href = LATEST + opt.asset
+        document.getElementById('primary-label').textContent = opt.label
+        document.getElementById('final-label').textContent = opt.label
+        document.getElementById('primary-sub').textContent = '· ' + opt.sub
+        document.getElementById('cta-note').innerHTML = opt.note + ' · Gratis y de código abierto'
+        document.querySelector(`.platform[data-os="${os}"]`)?.classList.add('current')
+      } else {
+        document.getElementById('primary-label').textContent = 'Ver descargas'
+        if (os === 'mobile') {
+          document.getElementById('cta-note').textContent = 'Streamline es una app para computadora: ábrela desde tu Mac, Windows o Linux.'
+        }
+      }
+
+      // Version and file sizes from the latest GitHub release.
+      try {
+        const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } })
+        if (!r.ok) return
+        const rel = await r.json()
+        document.querySelectorAll('[data-version]').forEach((el) => (el.textContent = rel.tag_name))
+        const sizes = Object.fromEntries((rel.assets || []).map((a) => [a.name, a.size]))
+        document.querySelectorAll('[data-asset]').forEach((a) => {
+          const span = a.querySelector('.l span')
+          const size = formatSize(sizes[a.dataset.asset])
+          if (span && size && !span.dataset.sized) {
+            span.textContent += ' · ' + size
+            span.dataset.sized = '1'
+          }
+        })
+      } catch {}
+    }
+
+    document.querySelectorAll('[data-copy]').forEach((b) =>
+      b.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(b.dataset.copy)
+          b.textContent = 'Copiado'
+          setTimeout(() => (b.textContent = 'Copiar'), 1500)
+        } catch {}
+      }),
+    )
+
+    init()
+  </script>
+</body>
+</html>
